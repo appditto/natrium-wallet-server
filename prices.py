@@ -1,4 +1,4 @@
-import redis, urllib3, certifi, socket, json, time, cfscrape
+import redis, urllib3, certifi, socket, json, time, os, sys
 from exchanges.bitfinex import Bitfinex
 from coinmarketcap import Market
 
@@ -24,6 +24,8 @@ def coinmarketcap():
 		print(rdata.hset("prices", "coinmarketcap:nano-btc", price_btc),price_btc)
 		print(rdata.hset("prices", "coinmarketcap:lastupdate",int(time.time())),int(time.time()))
 	except:
+		exc_type, exc_obj, exc_tb = sys.exc_info()
+		print('exception',exc_type, exc_obj, exc_tb.tb_lineno)
 		print("Failed to load from CoinMarketCap")
 
 def bitfinex():
