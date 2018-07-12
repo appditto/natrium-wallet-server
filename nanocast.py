@@ -208,16 +208,20 @@ def Work_Defer(handler, message):
 		logging.error('work already requested;'+handler.request.remote_ip+';'+handler.id)
 		return
 	else: active_work.add(request['hash'])
-	rpc = tornado.httpclient.AsyncHTTPClient()
-	response = yield Work_Request(rpc, message)
-	logging.info('work request return code;'+str(response.code))
-	if response.error:
-		logging.error('work defer error;'+handler.request.remote_ip+';'+handler.id)
-		handler.write_message("work defer error")
-	else:
-		logging.info('work defer response sent:;'+str(strclean(response.body))+';'+handler.request.remote_ip+';'+handler.id)
-		handler.write_message(response.body)
-	active_work.remove(request['hash'])
+	try:
+		rpc = tornado.httpclient.AsyncHTTPClient()
+		response = yield Work_Request(rpc, message)
+		logging.info('work request return code;'+str(response.code))
+		if response.error:
+			logging.error('work defer error;'+handler.request.remote_ip+';'+handler.id)
+			handler.write_message("work defer error")
+		else:
+			logging.info('work defer response sent:;'+str(strclean(response.body))+';'+handler.request.remote_ip+';'+handler.id)
+			handler.write_message(response.body)
+		active_work.remove(request['hash'])
+	except:		
+		logging.error('work defer exception;'+str(sys.exc_info())+';'+handler.request.remote_ip+';'+handler.id)
+		active_work.remove(request['hash'])
 
 @tornado.gen.coroutine
 def RPC_Subscribe(handler, account, currency):
