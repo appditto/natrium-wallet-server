@@ -70,6 +70,8 @@ def strclean(instr):
 
 @tornado.gen.coroutine
 def SendPrices():
+	#global active_work
+	#active_work = set()						# empty out this set periodically, to ensure clients dont somehow get stuck when an error causes their work not to return
 	if len(clients):
 		print('['+str(int(time.time()))+'] Pushing price data to '+str(len(clients))+' subscribers...')
 		logging.info('pushing price data to '+str(len(clients))+' connections')
@@ -114,17 +116,26 @@ def Pending_Defer(handler, request):
 	rpc = tornado.httpclient.AsyncHTTPClient()
 	requested = json.loads(request)
 	response = yield RPC_Request(rpc,request)
-	data = json.loads(response.body.decode('ascii'))
+	
+	if response.error:
+		logging.error('pending defer request failure;'+str(response.error)+';'+rpc_url+';'+message+';'+handler.request.remote_ip+';'+handler.id)
+		reply = "pending defer error"
+	else:
+		data = json.loads(response.body.decode('ascii'))
+		# sort dict keys by amount value within, descending
+		newlist = sorted(data['blocks'], key=lambda x: (int(data['blocks'][x]['amount'])), reverse=True)
+		# only provide the first 10
+		newlist = newlist[:10]
+		# build a new json structure
+		if len(newlist) > 0:
+			newdict = {"blocks":{}}
+			for x in newlist:
+				newdict['blocks'][x]=data['blocks'][x]
+		else:
+			newdict = {"blocks":""} # returning {} as the value for blocks causes issues with clients, RPC provides "", lets do the same.
+		reply = json.dumps(newdict)
+		logging.info('pending defer response sent;'+str(strclean(reply))+';'+rpc_url+';'+handler.request.remote_ip+';'+handler.id)
 
-	# sort dict keys by amount value within, descending
-	newlist = sorted(data['blocks'], key=lambda x: (int(data['blocks'][x]['amount'])), reverse=True)
-	# only provide the first 10
-	newlist = newlist[:10]
-	# build a new json structure
-	newdict = {"blocks":{}}
-	for x in newlist:
-		newdict['blocks'][x]=data['blocks'][x]
-	reply = json.dumps(newdict)
 	# return to client	
 	handler.write_message(reply)
 	
@@ -437,6 +448,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 		except Exception as e:
 			logging.error('uncaught error;'+str(e)+';'+self.request.remote_ip+';'+self.id)
 			self.write_message('{"error":"general error","detail":"'+str(e)+'"}')
+			active_messages.remove(message)
 		# cleanup when done, allow repeats after done processing the first	
 		active_messages.remove(message)
 
