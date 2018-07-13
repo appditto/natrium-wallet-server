@@ -13,14 +13,16 @@ def coinmarketcap():
 		cmc = Market()
 		for currency in currency_list:
 			try:
-				price_data = cmc.ticker('nano',limit=1,convert=currency.upper())[0]
-				data_name = 'price_'+currency.lower()
-				price_currency = price_data[data_name]
+				price_data = cmc.ticker(1567,convert=currency.upper())
+				data_name = currency.upper()
+				price_currency = price_data['data']['quotes'][data_name]['price']
 				print(rdata.hset("prices", "coinmarketcap:nano-"+currency.lower(), price_currency),"Coinmarketcap NANO-"+currency.upper(), price_currency)
 			except:
+				exc_type, exc_obj, exc_tb = sys.exc_info()
+				print('exception',exc_type, exc_obj, exc_tb.tb_lineno)
 				print("Failed to get price for NANO-"+currency.upper()+" Error")
-		price_data = cmc.ticker('nano',limit=1,convert=currency.upper())[0]	
-		price_btc = price_data['price_btc']	
+		price_data = cmc.ticker(1567,convert='BTC')
+		price_btc = price_data['data']['quotes']['BTC']['price']
 		print(rdata.hset("prices", "coinmarketcap:nano-btc", price_btc),price_btc)
 		print(rdata.hset("prices", "coinmarketcap:lastupdate",int(time.time())),int(time.time()))
 	except:

@@ -148,7 +148,7 @@ def Process_Defer(handler, block):
 
 	# check for receive race condition
 	#if block['type'] == 'state' and block['previous'] and block['balance'] and block['link']:
-	if block['type'] == 'state' and {'previous', 'balance', 'link'} <= set(block):	
+	if block['type'] == 'state' and {'previous', 'balance', 'link'} <= set(block):
 		try:
 			prev_response = yield RPC_Request(rpc, json.dumps({
 				'action': 'blocks_info',
@@ -156,14 +156,14 @@ def Process_Defer(handler, block):
 				'balance': 'true'
 			}))
 			prev_response = json.loads(prev_response.body.decode('ascii'))
-			
+
 			try:
 				prev_block = json.loads(prev_response['blocks'][block['previous']]['contents'])
-				
+
 				if prev_block['type'] != 'state' and ('balance' in prev_block): prev_balance = int(prev_block['balance'],16)
 				elif prev_block['type'] != 'state' and ('balance' not in prev_block): prev_balance = int(prev_response['blocks'][block['previous']]['balance'])
 				else: prev_balance = int(prev_block['balance'])
-				
+
 				if int(block['balance']) < prev_balance:
 					link_hash = block['link']
 					if link_hash.startswith('xrb_') or link_hash.startswith('nano_'):
@@ -250,19 +250,16 @@ def RPC_Subscribe(handler, account, currency):
 		info = json.dumps(info)
 		logging.info('subscribe response sent;'+str(strclean(response.body))+';'+handler.request.remote_ip+';'+handler.id)
 		handler.write_message(info)
-		
-@tornado.gen.coroutine		
-def RPC_Reconnect(handler, account):
+
+@tornado.gen.coroutine
+def RPC_Reconnect(handler):
 	logging.info('reconnecting;'+handler.request.remote_ip+';'+handler.id)
 	rpc = tornado.httpclient.AsyncHTTPClient()
-	try:
-		account = rdata.hget(handler.id, "account").decode('utf-8')
-	except:
-		logging.error('reconnect but no account stored, using passed value;'+account+';'+handler.request.remote_ip+';'+handler.id)
+	account = rdata.hget(handler.id, "account").decode('utf-8')
 	message = '{\"action\":\"account_info",\"account\":\"'+account+'\",\"pending\":true,\"representative\":true}'
 	logging.info('sending request;'+message+';'+handler.request.remote_ip+';'+handler.id)
 	response = yield RPC_Request(rpc, message)
-	
+
 	if response.error:
 		logging.error('reconnect error;'+handler.request.remote_ip+';'+handler.id)
 		handler.write_message('{"error":"reconnect error"}')
@@ -302,30 +299,27 @@ def RPC_AccountCheck(handler, account):
 
 		logging.info('account check response sent;'+handler.request.remote_ip+';'+handler.id)
 		handler.write_message(info)
-		
+
 class WSHandler(tornado.websocket.WebSocketHandler):
 
 	def open(self):
 		self.id = str(uuid.uuid4())
 		clients[self.id] = self
 		logging.info('new connection;'+self.request.remote_ip+';'+self.id+';User-Agent:'+str(self.request.headers.get('User-Agent')))
-		
+
 	def on_message(self, message):
 		address = str(self.request.remote_ip)
 		now = int(round(time.time() * 1000))
 		if address in mesg_last:
 			if (now - mesg_last[address]) < 25:
 				logging.error('client messaging too quickly: '+str(now - mesg_last[address])+'ms;'+self.request.remote_ip+';'+self.id+';User-Agent:'+str(self.request.headers.get('User-Agent')))
-				#return		
 		mesg_last[address] = now
-				
 		logging.info('request;'+message+';'+self.request.remote_ip+';'+self.id)
 		if message not in active_messages:
 			active_messages.add(message)
 		else:
 			logging.error('request already active;'+message+';'+self.request.remote_ip+';'+self.id)
 			return
-		
 		try:
 			nanocast_request = json.loads(message)
 			if nanocast_request['action'] in allowed_rpc_actions:
@@ -360,13 +354,12 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 									sub_pref_cur[self.id] = 'usd'
 									rdata.hset(self.id, "currency", 'usd')
 
-							RPC_Reconnect(self, nanocast_request['account'].decode('ascii'))
+							RPC_Reconnect(self)
 							rdata.rpush("conntrack",str(float(time.time()))+":"+self.id+":connect:"+self.request.remote_ip)
 						except Exception as e:
 							logging.error('reconnect error;'+str(e)+';'+self.request.remote_ip+';'+self.id)
-							
 							reply = {'error':'reconnect error','detail':str(e)}
-							if requestid is not None: reply['request_id']=requestid							
+							if requestid is not None: reply['request_id']=requestid
 							self.write_message(json.dumps(reply))
 					# new user, setup uuid(or use existing if available) and account info
 					else:
@@ -379,9 +372,8 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 							rdata.rpush("conntrack",str(float(time.time()))+":"+self.id+":connect:"+self.request.remote_ip)
 						except Exception as e:
 							logging.error('subscribe error;'+str(e)+';'+self.request.remote_ip+';'+self.id)
-							
 							reply = {'error':'subscribe error','detail':str(e)}
-							if requestid is not None: reply['request_id']=requestid							
+							if requestid is not None: reply['request_id']=requestid
 							self.write_message(json.dumps(reply))
 
 				# rpc: price_data
@@ -402,17 +394,17 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 						logging.error('price data error;'+str(e)+';'+self.request.remote_ip+';'+self.id)
 						self.write_message('{"error":"price data error","detail":"'+str(e)+'"}')
 
-				# rpc: account_check					
-				elif nanocast_request['action'] == "account_check":	
+				# rpc: account_check
+				elif nanocast_request['action'] == "account_check":
 					logging.info('account check request;'+self.request.remote_ip+';'+self.id)
 					try:
 						RPC_AccountCheck(self, nanocast_request['account'])
 					except Exception as e:
 						logging.error('account check error;'+str(e)+';'+self.request.remote_ip+';'+self.id)
 						self.write_message('{"error":"account check error","detail":"'+str(e)+'"}')
-						
+
 				# rpc: work_generate
-				elif nanocast_request['action'] == "work_generate":	
+				elif nanocast_request['action'] == "work_generate":
 					if self.request.headers.get('X-Client-Version') is None: xcver = 0
 					else: xcver = int(self.request.headers.get('X-Client-Version'))
 					#logging.debug(self.request.headers)
@@ -425,7 +417,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 						except Exception as e:
 							logging.error('work rpc error;'+str(e)+';'+self.request.remote_ip+';'+self.id+';User-Agent:'+str(self.request.headers.get('User-Agent')))
 							self.write_message('{"error":"work rpc error","detail":"'+str(e)+'"}')
-							
+
 				# rpc: process
 				elif nanocast_request['action'] == "process":
 					try:
@@ -433,17 +425,25 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 					except Exception as e:
 						logging.error('process rpc error;'+str(e)+';'+self.request.remote_ip+';'+self.id+';User-Agent:'+str(self.request.headers.get('User-Agent')))
 						self.write_message('{"error":"process rpc error","detail":"'+str(e)+'"}')
-						
+
 				# rpc: pending
 				elif nanocast_request['action'] == "pending":
 					try:
 						Pending_Defer(self, json.dumps(nanocast_request))
 					except Exception as e:
 						logging.error('pending rpc error;'+str(e)+';'+self.request.remote_ip+';'+self.id+';User-Agent:'+str(self.request.headers.get('User-Agent')))
-						self.write_message('{"error":"pending rpc error","detail":"'+str(e)+'"}')				
-				
-				# rpc: fallthrough and error catch		
-				else:					
+						self.write_message('{"error":"pending rpc error","detail":"'+str(e)+'"}')
+				elif nanocast_request['action'] == 'account_history':
+					if rdata.hget(self.id, "account") == None:
+						rdata.hset(self.id, "account", nanocast_request['account'])
+					try:
+						RPC_Defer(self, json.dumps(nanocast_request))
+					except Exception as e:
+						logging.error('rpc error;'+str(e)+';'+self.request.remote_ip+';'+self.id)
+						self.write_message('{"error":"rpc error","detail":"'+str(e)+'"}')
+
+				# rpc: fallthrough and error catch
+				else:
 					try:
 						RPC_Defer(self, json.dumps(nanocast_request))
 					except Exception as e:
