@@ -221,7 +221,7 @@ def Work_Defer(handler, message):
 		active_work.remove(request['hash'])
 	except:		
 		logging.error('work defer exception;'+str(sys.exc_info())+';'+handler.request.remote_ip+';'+handler.id)
-		active_work.remove(request['hash'])s
+		active_work.remove(request['hash'])
 
 @tornado.gen.coroutine
 def RPC_Subscribe(handler, account, currency):
