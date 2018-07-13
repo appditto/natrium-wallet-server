@@ -221,7 +221,7 @@ def Work_Defer(handler, message):
 		active_work.remove(request['hash'])
 	except:		
 		logging.error('work defer exception;'+str(sys.exc_info())+';'+handler.request.remote_ip+';'+handler.id)
-		active_work.remove(request['hash'])
+		active_work.remove(request['hash'])s
 
 @tornado.gen.coroutine
 def RPC_Subscribe(handler, account, currency):
@@ -252,10 +252,13 @@ def RPC_Subscribe(handler, account, currency):
 		handler.write_message(info)
 		
 @tornado.gen.coroutine		
-def RPC_Reconnect(handler):
+def RPC_Reconnect(handler, account):
 	logging.info('reconnecting;'+handler.request.remote_ip+';'+handler.id)
 	rpc = tornado.httpclient.AsyncHTTPClient()
-	account = rdata.hget(handler.id, "account").decode('utf-8')
+	try:
+		account = rdata.hget(handler.id, "account").decode('utf-8')
+	except:
+		logging.error('reconnect but no account stored, using passed value;'+account+';'+handler.request.remote_ip+';'+handler.id)
 	message = '{\"action\":\"account_info",\"account\":\"'+account+'\",\"pending\":true,\"representative\":true}'
 	logging.info('sending request;'+message+';'+handler.request.remote_ip+';'+handler.id)
 	response = yield RPC_Request(rpc, message)
@@ -357,7 +360,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 									sub_pref_cur[self.id] = 'usd'
 									rdata.hset(self.id, "currency", 'usd')
 
-							RPC_Reconnect(self)
+							RPC_Reconnect(self, nanocast_request['account'])
 							rdata.rpush("conntrack",str(float(time.time()))+":"+self.id+":connect:"+self.request.remote_ip)
 						except Exception as e:
 							logging.error('reconnect error;'+str(e)+';'+self.request.remote_ip+';'+self.id)
