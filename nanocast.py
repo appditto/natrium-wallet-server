@@ -255,7 +255,13 @@ def RPC_Subscribe(handler, account, currency):
 def RPC_Reconnect(handler):
 	logging.info('reconnecting;'+handler.request.remote_ip+';'+handler.id)
 	rpc = tornado.httpclient.AsyncHTTPClient()
-	account = rdata.hget(handler.id, "account").decode('utf-8')
+	try:
+		account = rdata.hget(handler.id, "account").decode('utf-8')
+	except:
+		logging.error('reconnect error, account not seen on this server before;'+handler.request.remote_ip+';'+handler.id)
+		handler.write_message('{"error":"reconnect error","detail":"account not seen on this server before"}')
+		return
+
 	message = '{\"action\":\"account_info",\"account\":\"'+account+'\",\"pending\":true,\"representative\":true}'
 	logging.info('sending request;'+message+';'+handler.request.remote_ip+';'+handler.id)
 	response = yield RPC_Request(rpc, message)
