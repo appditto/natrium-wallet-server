@@ -360,7 +360,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 									sub_pref_cur[self.id] = 'usd'
 									rdata.hset(self.id, "currency", 'usd')
 
-							RPC_Reconnect(self, nanocast_request['account'])
+							RPC_Reconnect(self, nanocast_request['account'].decode('ascii'))
 							rdata.rpush("conntrack",str(float(time.time()))+":"+self.id+":connect:"+self.request.remote_ip)
 						except Exception as e:
 							logging.error('reconnect error;'+str(e)+';'+self.request.remote_ip+';'+self.id)
