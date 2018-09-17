@@ -34,6 +34,10 @@ sudo apt install certbot
 sudo certbot certonly --standalone --preferred-challenges http -d <domain>
 ```
 
+## Firebase (FCM)
+
+For push notifications, get your legacy FCM api key from the firebase console.
+
 ## Installation
 ```git clone https://github.com/BananoCoin/natrium-wallet-server.git natriumcast```
 
@@ -55,6 +59,7 @@ export NANO_KEY_FILE=privkey.pem
 export NANO_CRT_FILE=fullchain.pem
 export NANO_LOG_FILE=/home/<username>/natriumcast.log
 export NANO_LOG_LEVEL=INFO
+export FCM_API_KEY=<firebase_api_key>
 ```
 ### Configure node for RPC
 Ensure rpc is enabled as well as control (security over internal wallet is provided in whitelisted commands)
@@ -106,6 +111,7 @@ Environment=NANO_KEY_FILE=privkey.pem
 Environment=NANO_CRT_FILE=fullchain.pem
 Environment=NANO_LOG_FILE=/home/user/natriumcast.log
 Environment=NANO_LOG_LEVEL=INFO
+Environment=FCM_API_KEY=<firebase_api_key>
 LimitNOFILE=65536
 ExecStart=/usr/local/bin/python3.6 /home/user/natriumcast/natriumcast.py
 Restart=always

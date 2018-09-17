@@ -10,6 +10,8 @@ import uuid
 from logging.handlers import WatchedFileHandler
 
 import redis
+from concurrent.futures import ThreadPoolExecutor
+from tornado import ioloop, concurrent
 import tornado.gen
 import tornado.httpclient
 import tornado.httpserver
@@ -17,6 +19,8 @@ import tornado.ioloop
 import tornado.web
 import tornado.websocket
 from bitstring import BitArray
+
+from pyfcm import FCMNotification
 
 import natriumcast
 
@@ -29,6 +33,7 @@ import natriumcast
 
 rdata = redis.StrictRedis(host='localhost', port=6379, db=2)  # used for price data and subscriber uuid info
 
+
 # get environment
 rpc_url = os.getenv('NANO_RPC_URL', 'http://127.0.0.1:7076')  # use env, else default to localhost rpc port
 callback_port = os.getenv('NANO_CALLBACK_PORT', 17076)
@@ -36,6 +41,7 @@ socket_port = os.getenv('NANO_SOCKET_PORT', 443)
 cert_dir = os.getenv('NANO_CERT_DIR')  # use /home/username instead of /home/username/
 cert_key_file = os.getenv('NANO_KEY_FILE')  # TLS certificate private key
 cert_crt_file = os.getenv('NANO_CRT_FILE')  # full TLS certificate bundle
+fcm_api_key = os.getenv('FCM_API_KEY')
 
 # whitelisted commands, disallow anything used for local node-based wallet as we may be using multiple back ends
 allowed_rpc_actions = ["account_balance", "account_block_count", "account_check", "account_info", "account_history",
@@ -50,6 +56,9 @@ allowed_rpc_actions = ["account_balance", "account_block_count", "account_check"
 currency_list = ["BTC", "AUD", "BRL", "CAD", "CHF", "CLP", "CNY", "CZK", "DKK", "EUR", "GBP", "HKD", "HUF", "IDR",
                  "ILS", "INR", "JPY", "KRW", "MXN", "MYR", "NOK", "NZD", "PHP", "PKR", "PLN", "RUB", "SEK", "SGD",
                  "THB", "TRY", "TWD", "USD", "ZAR"]
+
+# FCM service
+push_service = FCMNotification(api_key=fcm_api_key)
 
 # ephemeral data
 clients = {}  # store websocket sessions
@@ -92,6 +101,34 @@ def address_decode(address):
 
     return False
 
+def update_fcm_token_for_account(account, token):
+    """Store device FCM registration tokens in redis"""
+    rdata.set(token, account, ex=2592000) # Expire after 30-day inactivity
+    # Keep a list of tokens associated with this account
+    cur_list = rdata.get(account)
+    if cur_list is not None:
+        cur_list = json.loads(cur_list.decode('utf-8'))
+        if 'data' not in cur_list:
+            cur_list['data'] = []
+        if account not in cur_list['data']:
+            cur_list['data'].append(account)
+            rdata.set(account, json.dumps(cur_list))
+
+def get_fcm_tokens(account):        
+    """Return list of FCM tokens that belong to this account"""
+    ret = []
+    tokens = rdata.get(account)
+    if tokens is None:
+        return None
+    tokens = json.loads(tokens.decode('utf-8'))
+    if 'data' not in tokens:
+        return None
+    for t in tokens:
+        fcm_account = rdata.get(t)
+        if fcm_account is None or account != fcm_account:
+            continue
+        ret.append(t)
+    return ret
 
 # strip whitespace, conform to string output
 def strclean(instr):
@@ -100,6 +137,23 @@ def strclean(instr):
     elif type(instr) is bytes:
         return ' '.join(instr.decode('utf-8').split())
 
+
+class FCMClientAsync(object):
+    __instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls.__instance is None:
+            cls.__instance = super(
+                FCMClientAsync, cls).__new__(cls, *args, **kwargs)
+        return cls.__instance
+
+    def __init__(self):
+        self.executor = ThreadPoolExecutor(max_workers=4)
+        self.io_loop = ioloop.IOLoop.current()
+
+    @concurrent.run_on_executor
+    def notify_multiple_devices(self, registration_ids, message_title, message_body):
+        return push_service.notify_multiple_devices(registration_ids=registration_ids, message_title=message_title, message_body=message_body)
 
 @tornado.gen.coroutine
 def send_prices():
@@ -461,8 +515,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                             self.write_message(json.dumps(reply))
                     # Store FCM token if available, for push notifications
                     if 'fcm_token' in natriumcast_request:
-                        # Expire after 30-days
-                        rdata.set(natriumcast_request['fcm_token'], f"fcm{natriumcast_request['account']}", ex=2592000)
+                        update_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token'])
                 # rpc: price_data
                 elif natriumcast_request['action'] == "price_data":
                     logging.info('price data request;' + self.request.remote_ip + ';' + self.id)
@@ -595,6 +648,22 @@ class Callback(tornado.web.RequestHandler):
                 print("             Pushing to client %s" % subscriptions[link])
                 logging.info('push to client;' + json.dumps(data) + ';' + subscriptions[link])
                 clients[subscriptions[link]].write_message(json.dumps(data))
+            # Push FCM notification if this is a send
+            fcm_tokens = get_fcm_tokens(data['block']['link_as_account'])
+            if (fcm_tokens is None or len(fcm_tokens) == 0):
+                return
+            rpc = tornado.httpclient.AsyncHTTPClient()
+            response = yield rpc_request(rpc, {"action":"block", "hash":data['block']['previous']})
+            if response is None or response.error:
+                return
+            prev_data = json.loads(response.body.decode('ascii'))
+            prev_balance = int(response['contents']['balance'])
+            cur_balance = int(data['block']['balance'])
+            if prev_balance - cur_balance > 0:
+                # This is a send, push notifications
+                fcm_client_async = FCMClientAsync()
+                # Send notification with generic title, send amount as body. App should have localizations and use this information at its discretion
+                yield fcm_client_async.notify_multiple_devices(fcm_tokens, 'wallet_notification', str(prev_balance-cur_balance))
         elif subscriptions.get(data['account']):
             print("             Pushing to client %s" % subscriptions[data['account']])
             logging.info('push to client;' + json.dumps(data) + ';' + subscriptions[data['account']])
