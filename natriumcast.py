@@ -1,22 +1,25 @@
 # -*- coding: utf-8 -*-
 
+import json
+import logging
+import os
+import ssl
+import sys
+import time
+import uuid
+from logging.handlers import WatchedFileHandler
+
+import redis
+import tornado.gen
+import tornado.httpclient
+import tornado.httpserver
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
-import tornado.httpclient
-import tornado.httpserver
-import tornado.gen
-import json
-import redis
-import time
-import ssl
-import uuid
-import logging
-import os
-import sys
-
-from logging.handlers import WatchedFileHandler
 from bitstring import BitArray
+
+import natriumcast
+
 
 # future use for caching blocks
 # rblock  = redis.StrictRedis(host='localhost', port=6379, db=0)
@@ -456,7 +459,10 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                             reply = {'error': 'subscribe error', 'detail': str(e)}
                             if requestid is not None: reply['request_id'] = requestid
                             self.write_message(json.dumps(reply))
-
+                    # Store FCM token if available, for push notifications
+                    if 'fcm_token' in natriumcast_request:
+                        # Expire after 30-days
+                        rdata.set(natriumcast_request['fcm_token'], f"fcm{natriumcast_request['account']}", ex=2592000)
                 # rpc: price_data
                 elif natriumcast_request['action'] == "price_data":
                     logging.info('price data request;' + self.request.remote_ip + ';' + self.id)

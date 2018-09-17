@@ -4,3 +4,4 @@ certifi
 redis
 tornado 
 bitstring
+pyfcm
