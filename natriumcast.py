@@ -117,7 +117,7 @@ def update_fcm_token_for_account(account, token):
 def get_fcm_tokens(account):        
     """Return list of FCM tokens that belong to this account"""
     ret = []
-    tokens = rdata.get(account)
+    tokens = rdata.get(account).decode('utf-8')
     if tokens is None:
         return None
     tokens = json.loads(tokens.decode('utf-8'))
@@ -492,6 +492,9 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                             rpc_reconnect(self)
                             rdata.rpush("conntrack",
                                         str(float(time.time())) + ":" + self.id + ":connect:" + self.request.remote_ip)
+                            # Store FCM token if available, for push notifications
+                            if 'fcm_token' in natriumcast_request:
+                                update_fcm_token_for_account(rdata.hget(self.id, "account").decode('utf-8'), natriumcast_request['fcm_token'])
                         except Exception as e:
                             logging.error('reconnect error;' + str(e) + ';' + self.request.remote_ip + ';' + self.id)
                             reply = {'error': 'reconnect error', 'detail': str(e)}
@@ -508,14 +511,14 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                             rpc_subscribe(self, natriumcast_request['account'], currency)
                             rdata.rpush("conntrack",
                                         str(float(time.time())) + ":" + self.id + ":connect:" + self.request.remote_ip)
+                            # Store FCM token if available, for push notifications
+                            if 'fcm_token' in natriumcast_request:
+                                update_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token'])
                         except Exception as e:
                             logging.error('subscribe error;' + str(e) + ';' + self.request.remote_ip + ';' + self.id)
                             reply = {'error': 'subscribe error', 'detail': str(e)}
                             if requestid is not None: reply['request_id'] = requestid
                             self.write_message(json.dumps(reply))
-                    # Store FCM token if available, for push notifications
-                    if 'fcm_token' in natriumcast_request:
-                        update_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token'])
                 # rpc: price_data
                 elif natriumcast_request['action'] == "price_data":
                     logging.info('price data request;' + self.request.remote_ip + ';' + self.id)
