@@ -1,5 +1,4 @@
 import redis, urllib3, certifi, socket, json, time, os, sys
-from exchanges.bitfinex import Bitfinex
 from coinmarketcap import Market
 
 #rblocks = redis.StrictRedis(host='localhost', port=6379, db=0)
@@ -30,20 +29,9 @@ def coinmarketcap():
 		print('exception',exc_type, exc_obj, exc_tb.tb_lineno)
 		print("Failed to load from CoinMarketCap")
 
-def bitfinex():
-	try:
-		bitfinex = Bitfinex().get_current_price()
-		print(rdata.hset("prices","bitfinex:btc-usd",bitfinex))
-		print(rdata.hset("prices","bitfinex:lastupdate",int(time.time())))
-	except:
-		print("Failed to load from Bitfinex")
-
-bitfinex()
 coinmarketcap()
 
 print("Coinmarketcap NANO-USD:", rdata.hget("prices", "coinmarketcap:nano-usd").decode('utf-8'))
 print("Coinmarketcap NANO-BTC:", rdata.hget("prices", "coinmarketcap:nano-btc").decode('utf-8'))
 print("Last Update:          ", rdata.hget("prices", "coinmarketcap:lastupdate").decode('utf-8'))
-print("Bitfinex BTC-USD:     ", rdata.hget("prices", "bitfinex:btc-usd").decode('utf-8'))
-print("Last Update:          ", rdata.hget("prices", "bitfinex:lastupdate").decode('utf-8'))
 

@@ -1,5 +1,0 @@
-include setup.py
-include *.in *.md *.txt
-include exchanges/*.py
-
-

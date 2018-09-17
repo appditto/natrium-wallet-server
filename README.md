@@ -1,11 +1,13 @@
-# nano-wallet-server
+# natrium-wallet-server (NANO)
 
-Requires **Python 3.6** 
-[Download here](https://www.python.org/downloads/)
+**Requires Python 3.6**
 
-Minimum of one **NANO Node** with RPC enabled. See
-[Build Instructions](https://github.com/nanocurrency/raiblocks/wiki/Build-rai_node-samples) and
-[Installing as a Service](https://github.com/nanocurrency/raiblocks/wiki/Running-rai_node-as-a-service)
+Install requirements on Ubuntu 18.04:
+```
+apt install python3 python3-dev libdpkg-perl virtualenv
+```
+
+Minimum of one **NANO Node** with RPC enabled.
 Once installed as a service, make sure the systemd service file has the following entry:
 ```
 [Service]
@@ -14,24 +16,44 @@ LimitNOFILE=65536
 This will help prevent your system from running out of file handles due to may connections.
 
 **Redis server** running on the default port 6379
-[Installation](https://redis.io/topics/quickstart)
+
+On debian-based systems
+```
+sudo apt install redis-server
+```
+
+## Let's Encrypt
+Setup SSL with let's encrypt and cert bot.
+
+On ubuntu:
+
+```
+sudo add-apt-repository ppa:certbot/certbot
+sudo apt update
+sudo apt install certbot
+sudo certbot certonly --standalone --preferred-challenges http -d <domain>
+```
 
 ## Installation
-```git clone https://github.com/nano-wallet-company/nano-wallet-server/ nanocast```
+```git clone https://github.com/BananoCoin/natrium-wallet-server.git natriumcast```
 
-Use virtualenv if desired, else ensure python3.6 and pip/pip3 are installed (debian) and install the following modules:
-```sudo pip install pyblake2 redis tornado bitstring```
+Ensure python3.6 is installed and
+```
+cd natriumcast
+virtualenv -p python3.6 venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
 You must configure using environment variables. You may do this manually, as part of a launching script, in your bash settings, or within a systemd service.
 ```
 export NANO_RPC_URL=http://<host>:<rpcport>
-export NANO_WORK_URL=http://<host>:<workport>
 export NANO_CALLBACK_PORT=17076
 export NANO_SOCKET_PORT=443
-export NANO_CERT_DIR=/home/<username>
-export NANO_KEY_FILE=<yourdomain>.key
-export NANO_CRT_FILE=<yourdomain>.crt
-export NANO_LOG_FILE=/home/<username>/nanocast.log
+export NANO_CERT_DIR=/etc/letsencrypt/live/<domain>
+export NANO_KEY_FILE=privkey.pem
+export NANO_CRT_FILE=fullchain.pem
+export NANO_LOG_FILE=/home/<username>/natriumcast.log
 export NANO_LOG_LEVEL=INFO
 ```
 ### Configure node for RPC
@@ -58,46 +80,40 @@ Set config.json for your node
 ```
 
 ## Setup cron job for price retrieval
-```
-pip install coinmarketcap requests certifi
-```
-within the ```bitcoin-price-api``` subfolder:
-```python setup.py install```
 
 Run ```crontab -e``` and add the following:
 ```
-*/5 * * * * /usr/local/bin/python3.6 /home/<username>/nanocast/prices.py >/dev/null 2>&1
+*/5 * * * * /home/<username>/natriumcast/venv/bin/python /home/<username>/natriumcast/prices.py >/dev/null 2>&1
 ```
 
 ## systemd service file
 Remember to change ```NANO_RPC_URL``` port if using haproxy.
 
-/etc/systemd/system/nanocast.service
+/etc/systemd/system/natriumcast.service
 ```
 [Unit]
-Description=nanocast
+Description=natriumcast
 After=network.target
 After=systemd-user-sessions.service
 After=network-online.target
 
 [Service]
 Environment=NANO_RPC_URL=http://<host>:<rpcport>
-Environment=NANO_WORK_URL=http://<host>:<workport>
 Environment=NANO_CALLBACK_PORT=17076
 Environment=NANO_SOCKET_PORT=443
-Environment=NANO_CERT_DIR=/home/user
-Environment=NANO_KEY_FILE=yourdomain.key
-Environment=NANO_CRT_FILE=yourdomain.crt
-Environment=NANO_LOG_FILE=/home/user/nanocast.log
+Environment=NANO_CERT_DIR=/etc/letsencrypt/live/<domain>
+Environment=NANO_KEY_FILE=privkey.pem
+Environment=NANO_CRT_FILE=fullchain.pem
+Environment=NANO_LOG_FILE=/home/user/natriumcast.log
 Environment=NANO_LOG_LEVEL=INFO
 LimitNOFILE=65536
-ExecStart=/usr/local/bin/python3.6 /home/user/nanocast.py
+ExecStart=/usr/local/bin/python3.6 /home/user/natriumcast/natriumcast.py
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 ```
-Enable by running ```sudo systemctl enable nanocast.service``` run using ```sudo systemctl start nanocast.service```
+Enable by running ```sudo systemctl enable natriumcast.service``` run using ```sudo systemctl start natriumcast.service```
 
 ## [optional] haproxy node load balancing
 Multiple nodes may run on the same server as long as you change the RPC binding port for each. Same for the peering port.
