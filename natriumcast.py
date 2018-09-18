@@ -229,6 +229,11 @@ def pending_defer(handler, request):
 def process_defer(handler, block):
     rpc = tornado.httpclient.AsyncHTTPClient()
 
+    # Let's cache the link because, due to callback delay it's possible a client can receive
+    # a push notification for a block it already knows about
+    if 'link' in block:
+        rdata.set(f"link_{block['link']}", "1", ex=3600)
+
     # check for receive race condition
     # if block['type'] == 'state' and block['previous'] and block['balance'] and block['link']:
     if block['type'] == 'state' and {'previous', 'balance', 'link'} <= set(block):
@@ -638,6 +643,10 @@ class Callback(tornado.web.RequestHandler):
             rpc = tornado.httpclient.AsyncHTTPClient()
             response = await rpc_request(rpc, json.dumps({"action":"block", "hash":data['block']['previous']}))
             if response is None or response.error:
+                return
+            # See if this block was already pocketed
+            cached_hash = rdata.get(f"link_{data['hash']}")
+            if cached_hash is not None:
                 return
             prev_data = json.loads(response.body.decode('ascii'))
             prev_data = prev_data['contents'] = json.loads(prev_data['contents'])
