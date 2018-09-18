@@ -659,9 +659,8 @@ class Callback(tornado.web.RequestHandler):
                 for t in fcm_tokens:
                     message = aiofcm.Message(
                                 device_token=t,
-                                notification= {
-                                    "title": "nc_notification",
-                                    "body": str(prev_balance-cur_balance)
+                                data = {
+                                    "amount": str(prev_balance-cur_balance)
                                 }
                     )
                     await fcm.send_message(message)
