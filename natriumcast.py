@@ -549,7 +549,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                     else:
                         xcver = int(self.request.headers.get('X-Client-Version'))
                     # logging.debug(self.request.headers)
-                    if (self.request.headers.get('User-Agent') != 'SwiftWebSocket') and (xcver < 28):
+                    if (self.request.headers.get('User-Agent') != 'SwiftWebSocket') and (xcver < 1):
                         logging.error(
                             'work rpc denied;work disable;' + self.request.remote_ip + ';' + self.id + ';User-Agent:' + str(
                                 self.request.headers.get('User-Agent')))
