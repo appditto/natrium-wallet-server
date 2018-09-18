@@ -9,9 +9,8 @@ import time
 import uuid
 from logging.handlers import WatchedFileHandler
 
+import aiofcm
 import redis
-from concurrent.futures import ThreadPoolExecutor
-from tornado import ioloop, concurrent
 import tornado.gen
 import tornado.httpclient
 import tornado.httpserver
@@ -19,8 +18,6 @@ import tornado.ioloop
 import tornado.web
 import tornado.websocket
 from bitstring import BitArray
-
-from pyfcm import FCMNotification
 
 import natriumcast
 
@@ -42,6 +39,7 @@ cert_dir = os.getenv('NANO_CERT_DIR')  # use /home/username instead of /home/use
 cert_key_file = os.getenv('NANO_KEY_FILE')  # TLS certificate private key
 cert_crt_file = os.getenv('NANO_CRT_FILE')  # full TLS certificate bundle
 fcm_api_key = os.getenv('FCM_API_KEY')
+fcm_sender_id = os.getenv('FCM_SENDER_ID')
 
 # whitelisted commands, disallow anything used for local node-based wallet as we may be using multiple back ends
 allowed_rpc_actions = ["account_balance", "account_block_count", "account_check", "account_info", "account_history",
@@ -56,9 +54,6 @@ allowed_rpc_actions = ["account_balance", "account_block_count", "account_check"
 currency_list = ["BTC", "AUD", "BRL", "CAD", "CHF", "CLP", "CNY", "CZK", "DKK", "EUR", "GBP", "HKD", "HUF", "IDR",
                  "ILS", "INR", "JPY", "KRW", "MXN", "MYR", "NOK", "NZD", "PHP", "PKR", "PLN", "RUB", "SEK", "SGD",
                  "THB", "TRY", "TWD", "USD", "ZAR"]
-
-# FCM service
-push_service = FCMNotification(api_key=fcm_api_key)
 
 # ephemeral data
 clients = {}  # store websocket sessions
@@ -117,7 +112,7 @@ def update_fcm_token_for_account(account, token):
 def get_fcm_tokens(account):        
     """Return list of FCM tokens that belong to this account"""
     ret = []
-    tokens = rdata.get(account).decode('utf-8')
+    tokens = rdata.get(account)
     if tokens is None:
         return None
     tokens = json.loads(tokens.decode('utf-8'))
@@ -137,23 +132,6 @@ def strclean(instr):
     elif type(instr) is bytes:
         return ' '.join(instr.decode('utf-8').split())
 
-
-class FCMClientAsync(object):
-    __instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls.__instance is None:
-            cls.__instance = super(
-                FCMClientAsync, cls).__new__(cls, *args, **kwargs)
-        return cls.__instance
-
-    def __init__(self):
-        self.executor = ThreadPoolExecutor(max_workers=4)
-        self.io_loop = ioloop.IOLoop.current()
-
-    @concurrent.run_on_executor
-    def notify_multiple_devices(self, registration_ids, message_title, message_body):
-        return push_service.notify_multiple_devices(registration_ids=registration_ids, message_title=message_title, message_body=message_body)
 
 @tornado.gen.coroutine
 def send_prices():
@@ -652,7 +630,7 @@ class Callback(tornado.web.RequestHandler):
                 logging.info('push to client;' + json.dumps(data) + ';' + subscriptions[link])
                 clients[subscriptions[link]].write_message(json.dumps(data))
             # Push FCM notification if this is a send
-            fcm_tokens = get_fcm_tokens(data['block']['link_as_account'])
+            fcm_tokens = get_fcm_tokens(link)
             if (fcm_tokens is None or len(fcm_tokens) == 0):
                 return
             rpc = tornado.httpclient.AsyncHTTPClient()
@@ -660,13 +638,21 @@ class Callback(tornado.web.RequestHandler):
             if response is None or response.error:
                 return
             prev_data = json.loads(response.body.decode('ascii'))
-            prev_balance = int(response['contents']['balance'])
+            prev_balance = int(prev_data['contents']['balance'])
             cur_balance = int(data['block']['balance'])
             if prev_balance - cur_balance > 0:
                 # This is a send, push notifications
-                fcm_client_async = FCMClientAsync()
+                fcm = aiofcm.FCM(fcm_sender_id, fcm_api_key)
                 # Send notification with generic title, send amount as body. App should have localizations and use this information at its discretion
-                yield fcm_client_async.notify_multiple_devices(fcm_tokens, 'wallet_notification', str(prev_balance-cur_balance))
+                for t in fcm_tokens:
+                    message = aiofcm.Message(
+                                device_token=t,
+                                notification= {
+                                    "title": "nc_notification",
+                                    "body": str(prev_balance-cur_balance)
+                                }
+                    )
+                    await fcm.send_message(message)
         elif subscriptions.get(data['account']):
             print("             Pushing to client %s" % subscriptions[data['account']])
             logging.info('push to client;' + json.dumps(data) + ';' + subscriptions[data['account']])
