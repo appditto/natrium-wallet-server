@@ -103,13 +103,16 @@ def update_fcm_token_for_account(account, token):
     cur_list = rdata.get(account)
     if cur_list is not None:
         cur_list = json.loads(cur_list.decode('utf-8'))
-        if 'data' not in cur_list:
-            cur_list['data'] = []
-        if account not in cur_list['data']:
-            cur_list['data'].append(account)
-            rdata.set(account, json.dumps(cur_list))
+    else:
+        cur_list = {}
+    if 'data' not in cur_list:
+        cur_list['data'] = []
+    if token not in cur_list['data']:
+        cur_list['data'].append(token)
+        rdata.set(account, json.dumps(cur_list))
 
-def get_fcm_tokens(account):        
+
+def get_fcm_tokens(account):
     """Return list of FCM tokens that belong to this account"""
     ret = []
     tokens = rdata.get(account)
@@ -118,9 +121,9 @@ def get_fcm_tokens(account):
     tokens = json.loads(tokens.decode('utf-8'))
     if 'data' not in tokens:
         return None
-    for t in tokens:
+    for t in tokens['data']:
         fcm_account = rdata.get(t)
-        if fcm_account is None or account != fcm_account:
+        if fcm_account is None or account != fcm_account.decode('utf-8'):
             continue
         ret.append(t)
     return ret
@@ -622,7 +625,6 @@ class Callback(tornado.web.RequestHandler):
                 print("             Pushing to client %s" % subscriptions[target])
                 logging.info('push to client;' + json.dumps(data['block']) + ';' + subscriptions[target])
                 clients[subscriptions[target]].write_message(json.dumps(data))
-
         elif data['block']['type'] == 'state':
             link = data['block']['link_as_account']
             if subscriptions.get(link):
@@ -631,13 +633,14 @@ class Callback(tornado.web.RequestHandler):
                 clients[subscriptions[link]].write_message(json.dumps(data))
             # Push FCM notification if this is a send
             fcm_tokens = get_fcm_tokens(link)
-            if (fcm_tokens is None or len(fcm_tokens) == 0):
+            if fcm_tokens is None or len(fcm_tokens) == 0:
                 return
             rpc = tornado.httpclient.AsyncHTTPClient()
-            response = yield rpc_request(rpc, {"action":"block", "hash":data['block']['previous']})
+            response = await rpc_request(rpc, json.dumps({"action":"block", "hash":data['block']['previous']}))
             if response is None or response.error:
                 return
             prev_data = json.loads(response.body.decode('ascii'))
+            prev_data = prev_data['contents'] = json.loads(prev_data['contents'])
             prev_balance = int(prev_data['contents']['balance'])
             cur_balance = int(data['block']['balance'])
             if prev_balance - cur_balance > 0:
@@ -674,8 +677,8 @@ if __name__ == "__main__":
     root = logging.getLogger()
     root.setLevel(os.environ.get("NANO_LOG_LEVEL", "INFO"))
     root.addHandler(handler)
-    print("[" + str(int(time.time())) + "] Starting NANOCast Server...")
-    logging.info('Starting NANOCast Server')
+    print("[" + str(int(time.time())) + "] Starting NatriumCast Server...")
+    logging.info('Starting NatriumCast Server')
     logging.getLogger('tornado.access').disabled = True
 
     cert = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
