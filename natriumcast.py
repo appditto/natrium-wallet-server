@@ -123,7 +123,11 @@ def get_fcm_tokens(account):
         return None
     for t in tokens['data']:
         fcm_account = rdata.get(t)
-        if fcm_account is None or account != fcm_account.decode('utf-8'):
+        if fcm_account is None:
+            continue
+        elif account != fcm_account.decode('utf-8'):
+            tokens['data'].remove(t)
+            rdata.set(account, tokens)
             continue
         ret.append(t)
     return ret
@@ -652,7 +656,8 @@ class Callback(tornado.web.RequestHandler):
             prev_data = prev_data['contents'] = json.loads(prev_data['contents'])
             prev_balance = int(prev_data['contents']['balance'])
             cur_balance = int(data['block']['balance'])
-            if prev_balance - cur_balance > 0:
+            send_amount = prev_balance - cur_balance
+            if send_amount >= 1000000000000000000000000:
                 # This is a send, push notifications
                 fcm = aiofcm.FCM(fcm_sender_id, fcm_api_key)
                 # Send notification with generic title, send amount as body. App should have localizations and use this information at its discretion
@@ -660,7 +665,7 @@ class Callback(tornado.web.RequestHandler):
                     message = aiofcm.Message(
                                 device_token=t,
                                 data = {
-                                    "amount": str(prev_balance-cur_balance)
+                                    "amount": str(send_amount)
                                 }
                     )
                     await fcm.send_message(message)
