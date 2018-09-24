@@ -305,16 +305,28 @@ def work_request(http_client, body):
     if dpow_url is not None and dpow_key is not None:
         dpow_request = json.loads(body)
         dpow_request['key'] = dpow_key
-        response = yield http_client.fetch(dpow_url, method='POST', body=json.dumps(dpow_request))
-        if not response.error:
-            raise tornado.gen.Return(response)
+        # TODO we should probably handle timeouts for standard RPC calls in similar fashion
+        try:
+            response = yield http_client.fetch(dpow_url, method='POST', body=json.dumps(dpow_request))      
+            if not response.error:
+                try:
+                    response_body = json.loads(response.body)
+                    if 'work' in response_body:
+                        raise tornado.gen.Return(response)
+                    else:
+                        logging.error("dpow unexpected response;" + str(response.body))
+                except ValueError as e:
+                    logging.error('dpow response body invalid;' + str(e))
+            else:
+                logging.error('dpow request error;' + str(response.code))
+        except tornado.httpclient.HTTPClientError as e:
+            logging.error('timeout on dpow request;' + str(e.code))
     # No dPow, inject use_peers option into request
     request = json.loads(body)
     if 'use_peers' not in request:
         request['use_peers'] = True
     response = yield http_client.fetch(rpc_url, method='POST', body=json.dumps(request))
     raise tornado.gen.Return(response)
-
 
 @tornado.gen.coroutine
 def work_defer(handler, message):
