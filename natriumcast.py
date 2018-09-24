@@ -9,8 +9,8 @@ import time
 import uuid
 from logging.handlers import WatchedFileHandler
 
-import aiofcm
 import redis
+import requests
 import tornado.gen
 import tornado.httpclient
 import tornado.httpserver
@@ -19,6 +19,7 @@ import tornado.web
 import tornado.websocket
 from bitstring import BitArray
 
+import aiofcm
 import natriumcast
 
 
@@ -40,6 +41,8 @@ cert_key_file = os.getenv('NANO_KEY_FILE')  # TLS certificate private key
 cert_crt_file = os.getenv('NANO_CRT_FILE')  # full TLS certificate bundle
 fcm_api_key = os.getenv('FCM_API_KEY')
 fcm_sender_id = os.getenv('FCM_SENDER_ID')
+dpow_url = os.getenv('NANO_DPOW_URL', None)
+dpow_key = os.getenv('NANO_DPOW_KEY', None)
 
 # whitelisted commands, disallow anything used for local node-based wallet as we may be using multiple back ends
 allowed_rpc_actions = ["account_balance", "account_block_count", "account_check", "account_info", "account_history",
@@ -298,7 +301,18 @@ def process_defer(handler, block):
 
 @tornado.gen.coroutine
 def work_request(http_client, body):
-    response = yield http_client.fetch(rpc_url, method='POST', body=body)
+    # If distributed POW is available, try the request there first and inject the key
+    if dpow_url is not None and dpow_key is not None:
+        dpow_request = json.loads(body)
+        dpow_request['key'] = dpow_key
+        response = yield http_client.fetch(dpow_url, method='POST', body=json.dumps(dpow_request))
+        if not response.error:
+            raise tornado.gen.Return(response)
+    # No dPow, inject use_peers option into request
+    request = json.loads(body)
+    if 'use_peers' not in request:
+        request['use_peers'] = True
+    response = yield http_client.fetch(rpc_url, method='POST', body=json.dumps(request))
     raise tornado.gen.Return(response)
 
 
@@ -310,8 +324,6 @@ def work_defer(handler, message):
         return
     else:
         active_work.add(request['hash'])
-        request['use_peers'] = True
-        message = json.dumps(request)
     try:
         rpc = tornado.httpclient.AsyncHTTPClient()
         response = yield work_request(rpc, message)
