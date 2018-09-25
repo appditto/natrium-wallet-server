@@ -105,7 +105,7 @@ def update_fcm_token_for_account(account, token):
     # Keep a list of tokens associated with this account
     cur_list = rdata.get(account)
     if cur_list is not None:
-        cur_list = json.loads(cur_list.decode('utf-8'))
+        cur_list = json.loads(cur_list.decode('utf-8').replace('\'', '"'))
     else:
         cur_list = {}
     if 'data' not in cur_list:
@@ -114,13 +114,12 @@ def update_fcm_token_for_account(account, token):
         cur_list['data'].append(token)
     rdata.set(account, json.dumps(cur_list))
 
-
 def get_fcm_tokens(account):
     """Return list of FCM tokens that belong to this account"""
     tokens = rdata.get(account)
     if tokens is None:
         return None
-    tokens = json.loads(tokens.decode('utf-8'))
+    tokens = json.loads(tokens.decode('utf-8').replace('\'', '"'))
     # Rebuild the list for this account removing tokens that dont belong anymore
     new_token_list = {}
     new_token_list['data'] = []
