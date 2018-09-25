@@ -112,16 +112,18 @@ def update_fcm_token_for_account(account, token):
         cur_list['data'] = []
     if token not in cur_list['data']:
         cur_list['data'].append(token)
-        rdata.set(account, json.dumps(cur_list))
+    rdata.set(account, json.dumps(cur_list))
 
 
 def get_fcm_tokens(account):
     """Return list of FCM tokens that belong to this account"""
-    ret = []
     tokens = rdata.get(account)
     if tokens is None:
         return None
     tokens = json.loads(tokens.decode('utf-8'))
+    # Rebuild the list for this account removing tokens that dont belong anymore
+    new_token_list = {}
+    new_token_list['data'] = []
     if 'data' not in tokens:
         return None
     for t in tokens['data']:
@@ -129,11 +131,10 @@ def get_fcm_tokens(account):
         if fcm_account is None:
             continue
         elif account != fcm_account.decode('utf-8'):
-            tokens['data'].remove(t)
-            rdata.set(account, tokens)
             continue
-        ret.append(t)
-    return ret
+        new_token_list['data'].append(t)
+    rdata.set(account, new_token_list)
+    return new_token_list['data']
 
 # strip whitespace, conform to string output
 def strclean(instr):
