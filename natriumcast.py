@@ -233,7 +233,7 @@ def pending_defer(handler, request):
 # Check blocks submitted for processing to ensure the user or client has not accidentally created a send to an unknown
 # address due to balance miscalculation leading to the state block being interpreted as a send rather than a receive.
 @tornado.gen.coroutine
-def process_defer(handler, block):
+def process_defer(handler, block, do_work):
     rpc = tornado.httpclient.AsyncHTTPClient()
 
     # Let's cache the link because, due to callback delay it's possible a client can receive
@@ -293,7 +293,27 @@ def process_defer(handler, block):
                 handler.request.headers.get('User-Agent')))
             pass
 
-    response = yield rpc_defer(handler, json.dumps({
+    # Do work if we're told to
+    if 'work' not in block and do_work:
+        try:
+            work_response = yield work_request(rpc, json.dumps({
+                'action': 'work_generate',
+                'hash': block['previous']
+            }))
+            if work_response.error:
+                handler.write_message('{"error":"Failed work_generate in process request"}')
+                return
+            work_response = json.loads(work_response.body.decode('ascii'))
+            if 'work' not in work_response:
+                handler.write_message('{"error":"work response came back empty"}')
+                return
+            block['work'] = work_response['work']
+        except Exception as e:
+            logging.exception(e)
+            handler.write_message('{"error":"Failed work_generate in process request"}')
+            return
+
+    yield rpc_defer(handler, json.dumps({
         'action': 'process',
         'block': json.dumps(block)
     }))
@@ -342,7 +362,8 @@ def work_defer(handler, message):
         logging.info('work request return code;' + str(response.code))
         if response.error:
             logging.error('work defer error;' + handler.request.remote_ip + ';' + handler.id)
-            handler.write_message("work defer error")
+            handler.write_message('{"error":"work defer error"}')
+            return
         else:
             logging.info('work defer response sent:;' + str(
                 strclean(response.body)) + ';' + handler.request.remote_ip + ';' + handler.id)
@@ -591,7 +612,10 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                 # rpc: process
                 elif natriumcast_request['action'] == "process":
                     try:
-                        process_defer(self, json.loads(natriumcast_request['block']))
+                        do_work = False
+                        if 'do_work' in natriumcast_request and natriumcast_request['do_work'] == True:
+                            do_work = True
+                        process_defer(self, json.loads(natriumcast_request['block']), do_work)
                     except Exception as e:
                         logging.error('process rpc error;' + str(
                             e) + ';' + self.request.remote_ip + ';' + self.id + ';User-Agent:' + str(
