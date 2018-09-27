@@ -229,6 +229,19 @@ def pending_defer(handler, request):
     handler.write_message(reply)
 
 
+def pubkey(address):
+    account_map = "13456789abcdefghijkmnopqrstuwxyz"
+    account_lookup = {}
+    for i in range(0,32): #make a lookup table
+        account_lookup[account_map[i]] = BitArray(uint=i,length=5)
+    acrop_key = address[-60:-8] #leave out prefix and checksum
+    number_l = BitArray()                                    
+    for x in range(0, len(acrop_key)):    
+        number_l.append(account_lookup[acrop_key[x]])        
+    number_l = number_l[4:] # reduce from 260 to 256 bit
+    result = number_l.hex.upper()
+    return result
+
 # Server-side check for any incidental mixups due to race conditions or misunderstanding protocol.
 # Check blocks submitted for processing to ensure the user or client has not accidentally created a send to an unknown
 # address due to balance miscalculation leading to the state block being interpreted as a send rather than a receive.
@@ -296,9 +309,13 @@ def process_defer(handler, block, do_work):
     # Do work if we're told to
     if 'work' not in block and do_work:
         try:
+            if block['previous'] == '0' or block['previous'] == '0000000000000000000000000000000000000000000000000000000000000000':
+                workbase = pubkey(block['account'])
+            else:
+                workbase = block['previous']
             work_response = yield work_request(rpc, json.dumps({
                 'action': 'work_generate',
-                'hash': block['previous']
+                'hash': workbase
             }))
             if work_response.error:
                 handler.write_message('{"error":"Failed work_generate in process request"}')
