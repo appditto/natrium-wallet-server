@@ -731,7 +731,8 @@ class Callback(tornado.web.RequestHandler):
                                 device_token=t,
                                 data = {
                                     "amount": str(send_amount)
-                                }
+                                },
+                                priority=aiofcm.PRIORITY_HIGH
                     )
                     await fcm.send_message(message)
         elif subscriptions.get(data['account']):
