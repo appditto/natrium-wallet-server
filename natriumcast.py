@@ -545,8 +545,12 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                             rdata.rpush("conntrack",
                                         str(float(time.time())) + ":" + self.id + ":connect:" + self.request.remote_ip)
                             # Store FCM token if available, for push notifications
+                            account = rdata.hget(self.id, "account").decode('utf-8')
+                            if 'nano_' in account:
+                                account.replace('nano_', 'xrb_')
+                                rdata.hset(self.id, "account")
                             if 'fcm_token' in natriumcast_request:
-                                update_fcm_token_for_account(rdata.hget(self.id, "account").decode('utf-8'), natriumcast_request['fcm_token'])
+                                update_fcm_token_for_account(account, natriumcast_request['fcm_token'])
                         except Exception as e:
                             logging.error('reconnect error;' + str(e) + ';' + self.request.remote_ip + ';' + self.id)
                             reply = {'error': 'reconnect error', 'detail': str(e)}
@@ -560,7 +564,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                                 currency = natriumcast_request['currency']
                             else:
                                 currency = "usd"
-                            rpc_subscribe(self, natriumcast_request['account'], currency)
+                            rpc_subscribe(self, natriumcast_request['account'].replace("nano_", "xrb_"), currency)
                             rdata.rpush("conntrack",
                                         str(float(time.time())) + ":" + self.id + ":connect:" + self.request.remote_ip)
                             # Store FCM token if available, for push notifications
@@ -693,16 +697,15 @@ class Callback(tornado.web.RequestHandler):
         data = json.loads(data)
         data['block'] = json.loads(data['block'])
 
-        if data['block']['type'] == 'state':
-            # TODO maybe we should get more robust and not use prefixes
+        if data['block']['type'] == 'send':
+            target = data['block']['destination']
+            if subscriptions.get(target):
+                print("             Pushing to client %s" % subscriptions[target])
+                logging.info('push to client;' + json.dumps(data['block']) + ';' + subscriptions[target])
+                clients[subscriptions[target]].write_message(json.dumps(data))
+        elif data['block']['type'] == 'state':
             link = data['block']['link_as_account']
-            alt_link = link.replace('xrb_', 'nano_') if 'xrb_' in link else link.replace('nano_', 'xrb_')
             if subscriptions.get(link):
-                print("             Pushing to client %s" % subscriptions[link])
-                logging.info('push to client;' + json.dumps(data) + ';' + subscriptions[link])
-                clients[subscriptions[link]].write_message(json.dumps(data))
-            elif subscriptions.get(alt_link):
-                link = alt_link
                 print("             Pushing to client %s" % subscriptions[link])
                 logging.info('push to client;' + json.dumps(data) + ';' + subscriptions[link])
                 clients[subscriptions[link]].write_message(json.dumps(data))
@@ -736,16 +739,10 @@ class Callback(tornado.web.RequestHandler):
                                 priority=aiofcm.PRIORITY_HIGH
                     )
                     await fcm.send_message(message)
-        else:
-            account = data['account']
-            alt_account = account.replace('xrb_', 'nano_') if 'xrb_' in account else account.replace('nano_', 'xrb_')
-            if subscriptions.get(alt_account):
-                account = alt_account
-            if subscriptions.get(account):
-                print("             Pushing to client %s" % subscriptions[account])
-                logging.info('push to client;' + json.dumps(data) + ';' + subscriptions[account])
-                clients[subscriptions[account]].write_message(json.dumps(data))
-            
+        elif subscriptions.get(data['account']):
+            print("             Pushing to client %s" % subscriptions[data['account']])
+            logging.info('push to client;' + json.dumps(data) + ';' + subscriptions[data['account']])
+            clients[subscriptions[data['account']]].write_message(json.dumps(data))
 
 
 application = tornado.web.Application([
