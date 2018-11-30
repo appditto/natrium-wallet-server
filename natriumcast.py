@@ -700,8 +700,15 @@ class Callback(tornado.web.RequestHandler):
                 logging.info('push to client;' + json.dumps(data['block']) + ';' + subscriptions[target])
                 clients[subscriptions[target]].write_message(json.dumps(data))
         elif data['block']['type'] == 'state':
+            # TODO maybe we should get more robust and not use prefixes
             link = data['block']['link_as_account']
+            alt_link = link.replace('xrb_', 'nano_') if 'xrb_' in link else link.replace('nano_', 'xrb_')
             if subscriptions.get(link):
+                print("             Pushing to client %s" % subscriptions[link])
+                logging.info('push to client;' + json.dumps(data) + ';' + subscriptions[link])
+                clients[subscriptions[link]].write_message(json.dumps(data))
+            elif subscriptions.get(alt_link):
+                link = alt_link
                 print("             Pushing to client %s" % subscriptions[link])
                 logging.info('push to client;' + json.dumps(data) + ';' + subscriptions[link])
                 clients[subscriptions[link]].write_message(json.dumps(data))
