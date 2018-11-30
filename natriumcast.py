@@ -693,13 +693,7 @@ class Callback(tornado.web.RequestHandler):
         data = json.loads(data)
         data['block'] = json.loads(data['block'])
 
-        if data['block']['type'] == 'send':
-            target = data['block']['destination']
-            if subscriptions.get(target):
-                print("             Pushing to client %s" % subscriptions[target])
-                logging.info('push to client;' + json.dumps(data['block']) + ';' + subscriptions[target])
-                clients[subscriptions[target]].write_message(json.dumps(data))
-        elif data['block']['type'] == 'state':
+        if data['block']['type'] == 'state':
             # TODO maybe we should get more robust and not use prefixes
             link = data['block']['link_as_account']
             alt_link = link.replace('xrb_', 'nano_') if 'xrb_' in link else link.replace('nano_', 'xrb_')
@@ -742,10 +736,16 @@ class Callback(tornado.web.RequestHandler):
                                 priority=aiofcm.PRIORITY_HIGH
                     )
                     await fcm.send_message(message)
-        elif subscriptions.get(data['account']):
-            print("             Pushing to client %s" % subscriptions[data['account']])
-            logging.info('push to client;' + json.dumps(data) + ';' + subscriptions[data['account']])
-            clients[subscriptions[data['account']]].write_message(json.dumps(data))
+        else:
+            account = data['account']
+            alt_account = account.replace('xrb_', 'nano_') if 'xrb_' in account else account.replace('nano_', 'xrb_')
+            if subscriptions.get(alt_account):
+                account = alt_account
+            if subscriptions.get(account):
+                print("             Pushing to client %s" % subscriptions[account])
+                logging.info('push to client;' + json.dumps(data) + ';' + subscriptions[account])
+                clients[subscriptions[account]].write_message(json.dumps(data))
+            
 
 
 application = tornado.web.Application([
