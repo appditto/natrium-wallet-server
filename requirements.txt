@@ -1,4 +1,3 @@
-coinmarketcap
 requests
 certifi
 redis
