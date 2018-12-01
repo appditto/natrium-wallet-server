@@ -13,20 +13,13 @@ openexchangerates_url=f'https://openexchangerates.org/api/latest.json?app_id={op
 def openexchangerates():
     response = requests.get(url=openexchangerates_url).json()
     if 'rates' not in response:
-        print("INvalid response " + str(response))
+        print("Invalid response " + str(response))
         return
-    usdprice = rdata.hget("prices", "coingecko:nano-usd").decode('utf-8')
-    if usdprice is None:
-        print("Couldn't retrieve coingecko:nano-usd")
-        return
-    usdprice = float(usdprice)
     bolivarprice = response['rates']['VEF_BLKMKT']
     if bolivarprice is None:
         print("Couldn't find VEF_BLKMKT price")
         return
-    bolivarprice = float(f'{bolivarprice:.2f}')
-    conversion = str(usdprice * bolivarprice)
-    print(rdata.hset("prices", "coingecko:nano-ves", conversion),"Coingecko NANO-VES", conversion)
+    print(rdata.hset("prices", "openexchange:usd-vefblkmkt", bolivarprice),"Openexchange USD-VEF_BLKMKT", bolivarprice)
 
 openexchangerates()
-print("Coingecko NANO-VES:", rdata.hget("prices", "coingecko:nano-ves").decode('utf-8'))
+print("Openexchange USD-VEF_BLKMKT:", rdata.hget("prices", "openexchange:usd-vefblkmkt").decode('utf-8'))
