@@ -56,7 +56,7 @@ allowed_rpc_actions = ["account_balance", "account_block_count", "account_check"
 # all currencies polled on CMC
 currency_list = ["BTC", "AUD", "BRL", "CAD", "CHF", "CLP", "CNY", "CZK", "DKK", "EUR", "GBP", "HKD", "HUF", "IDR",
                  "ILS", "INR", "JPY", "KRW", "MXN", "MYR", "NOK", "NZD", "PHP", "PKR", "PLN", "RUB", "SEK", "SGD",
-                 "THB", "TRY", "TWD", "USD", "ZAR"]
+                 "THB", "TRY", "TWD", "USD", "VES", "ZAR"]
 
 # ephemeral data
 clients = {}  # store websocket sessions
