@@ -1,25 +1,21 @@
-openexchangerates_appid='' # Set your app id here
-
-# Separate file because we want to run this conversion much less frequently due to openexchangerates free tier limitations
-
-import redis, urllib3, certifi, socket, json, time, os, sys, requests
+import requests, redis, json
 
 #rblocks = redis.StrictRedis(host='localhost', port=6379, db=0)
 #rwork = redis.StrictRedis(host='localhost', port=6379, db=1)
 rdata = redis.StrictRedis(host='localhost', port=6379, db=2)
 
-openexchangerates_url=f'https://openexchangerates.org/api/latest.json?app_id={openexchangerates_appid}&show_alternative=true'
+dolartoday_price='https://s3.amazonaws.com/dolartoday/data.json'
 
-def openexchangerates():
-    response = requests.get(url=openexchangerates_url).json()
-    if 'rates' not in response:
+def dolartoday_bolivar():
+    response = json.loads(requests.get(url=dolartoday_price).text)
+    if "USD" not in response:
         print("Invalid response " + str(response))
         return
-    bolivarprice = response['rates']['VEF_BLKMKT']
+    bolivarprice = response['USD']['localbitcoin_ref']
     if bolivarprice is None:
-        print("Couldn't find VEF_BLKMKT price")
+        print("Couldn't find localbitcoin_ref price")
         return
-    print(rdata.hset("prices", "openexchange:usd-vefblkmkt", bolivarprice),"Openexchange USD-VEF_BLKMKT", bolivarprice)
+    print(rdata.hset("prices", "dolartoday:usd-ves", bolivarprice),"DolarToday USD-VES", bolivarprice)
 
-openexchangerates()
-print("Openexchange USD-VEF_BLKMKT:", rdata.hget("prices", "openexchange:usd-vefblkmkt").decode('utf-8'))
+dolartoday_bolivar()
+print("DolarToday USD-VES:", rdata.hget("prices", "dolartoday:usd-ves").decode('utf-8'))
