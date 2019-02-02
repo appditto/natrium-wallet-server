@@ -53,7 +53,7 @@ allowed_rpc_actions = ["account_balance", "account_block_count", "account_check"
                        "block_create", "blocks", "blocks_info", "block_account", "block_count", "block_count_type",
                        "chain", "delegators", "delegators_count", "frontiers", "frontier_count", "history",
                        "key_expand", "process", "representatives", "republish", "peers", "version", "pending",
-                       "pending_exists", "price_data", "work_generate"]
+                       "pending_exists", "price_data", "work_generate", "fcm_update"]
 
 # all currencies polled on CMC
 currency_list = ["BTC", "AUD", "BRL", "CAD", "CHF", "CLP", "CNY", "CZK", "DKK", "EUR", "GBP", "HKD", "HUF", "IDR",
