@@ -29,6 +29,8 @@ import natriumcast
 # future use for pending blocks for accounts, cached work
 # racct   = redis.StrictRedis(host='localhost', port=6379, db=1)
 
+# Used for FCM v2 tokens
+rfcm = redis.StrictRedis(host='localhost', port=6379, db=1)
 rdata = redis.StrictRedis(host='localhost', port=6379, db=2)  # used for price data and subscriber uuid info
 
 
@@ -99,11 +101,17 @@ def address_decode(address):
 
     return False
 
-def update_fcm_token_for_account(account, token):
+def delete_fcm_token_for_account(account, token):
+    rfcm.delete(token)
+    # Delete all tokens associated with this account
+    rfcm.set(account, json.dumps({'data': []}))
+
+def update_fcm_token_for_account(account, token, v2=False):
     """Store device FCM registration tokens in redis"""
-    rdata.set(token, account, ex=2592000) # Expire after 30-day inactivity
+    redisInst = rfcm if v2 else rdata
+    redisInst.set(token, account, ex=2592000) # Expire after 30-day inactivity
     # Keep a list of tokens associated with this account
-    cur_list = rdata.get(account)
+    cur_list = redisInst.get(account)
     if cur_list is not None:
         cur_list = json.loads(cur_list.decode('utf-8').replace('\'', '"'))
     else:
@@ -112,27 +120,28 @@ def update_fcm_token_for_account(account, token):
         cur_list['data'] = []
     if token not in cur_list['data']:
         cur_list['data'].append(token)
-    rdata.set(account, json.dumps(cur_list))
+    redisInst.set(account, json.dumps(cur_list))
 
-def get_fcm_tokens(account):
+def get_fcm_tokens(account, v2=False):
     """Return list of FCM tokens that belong to this account"""
-    tokens = rdata.get(account)
+    redisInst = rfcm if v2 else rdata
+    tokens = redisInst.get(account)
     if tokens is None:
-        return None
+        return []
     tokens = json.loads(tokens.decode('utf-8').replace('\'', '"'))
     # Rebuild the list for this account removing tokens that dont belong anymore
     new_token_list = {}
     new_token_list['data'] = []
     if 'data' not in tokens:
-        return None
+        return []
     for t in tokens['data']:
-        fcm_account = rdata.get(t)
+        fcm_account = redisInst.get(t)
         if fcm_account is None:
             continue
         elif account != fcm_account.decode('utf-8'):
             continue
         new_token_list['data'].append(t)
-    rdata.set(account, new_token_list)
+    redisInst.set(account, new_token_list)
     return new_token_list['data']
 
 # strip whitespace, conform to string output
@@ -339,9 +348,10 @@ def process_defer(handler, block, do_work):
 @tornado.gen.coroutine
 def work_request(http_client, body):
     # If distributed POW is available, try the request there first and inject the key
-    if dpow_url is not None and dpow_key is not None:
+    if dpow_url is not None:
         dpow_request = json.loads(body)
-        dpow_request['key'] = dpow_key
+        if dpow_key is not None:
+            dpow_request['key'] = dpow_key
         # TODO we should probably handle timeouts for standard RPC calls in similar fashion
         try:
             response = yield http_client.fetch(dpow_url, method='POST', body=json.dumps(dpow_request))      
@@ -548,9 +558,14 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                             account = rdata.hget(self.id, "account").decode('utf-8')
                             if 'nano_' in account:
                                 account.replace('nano_', 'xrb_')
-                                rdata.hset(self.id, "account")
+                                rdata.hset(self.id, "account", account)
                             if 'fcm_token' in natriumcast_request:
                                 update_fcm_token_for_account(account, natriumcast_request['fcm_token'])
+                            elif 'fcm_token_v2' in natriumcast_request and 'notification_enabled' in natriumcast_request:
+                                if natriumcast_request['notification_enabled']:
+                                    update_fcm_token_for_account(rdata.hget(self.id, "account").decode('utf-8'), natriumcast_request['fcm_token_v2'], v2=True)
+                                else:
+                                    delete_fcm_token_for_account(rdata.hget(self.id, "account").decode('utf-8'), natriumcast_request['fcm_token_v2']) 
                         except Exception as e:
                             logging.error('reconnect error;' + str(e) + ';' + self.request.remote_ip + ';' + self.id)
                             reply = {'error': 'reconnect error', 'detail': str(e)}
@@ -570,11 +585,23 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                             # Store FCM token if available, for push notifications
                             if 'fcm_token' in natriumcast_request:
                                 update_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token'])
+                            elif 'fcm_token_v2' in natriumcast_request and 'notification_enabled' in natriumcast_request:
+                                if natriumcast_request['notification_enabled']:
+                                    update_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token_v2'], v2=True)
+                                else:
+                                    delete_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token_v2'])
                         except Exception as e:
                             logging.error('subscribe error;' + str(e) + ';' + self.request.remote_ip + ';' + self.id)
                             reply = {'error': 'subscribe error', 'detail': str(e)}
                             if requestid is not None: reply['request_id'] = requestid
                             self.write_message(json.dumps(reply))
+                elif natriumcast_request['action'] == "fcm_update":
+                    # Updating FCM token
+                    if 'fcm_token_v2' in natriumcast_request and 'account' in natriumcast_request and 'enabled' in natriumcast_request:
+                        if natriumcast_request['enabled']:
+                            update_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token_v2'], v2=True)
+                        else:
+                            delete_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token_v2'])
                 # rpc: price_data
                 elif natriumcast_request['action'] == "price_data":
                     logging.info('price data request;' + self.request.remote_ip + ';' + self.id)
@@ -690,6 +717,31 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                 del subscriptions[account]
                 break
 
+class NanoConversions():
+    # 1 NANO = 10e30 RAW
+    RAW_PER_NANO = 10 ** 30
+
+    @classmethod
+    def minimalNumber(self, x):
+        if type(x) is str:
+            if x == '':
+                x = 0
+        f = float(x)
+        if f.is_integer():
+            return int(f)
+        else:
+            return round(f, 6)
+
+    @classmethod
+    def raw_to_nano(self, raw_amt):
+        nano_amt = raw_amt / self.RAW_PER_NANO
+        # Format to have optional decimals
+        return self.minimalNumber(nano_amt)
+
+    @staticmethod
+    def nano_to_raw(nano_amt):
+        expanded = float(nano_amt) * 1000000
+        return int(expanded) * (10 ** 24)
 
 class Callback(tornado.web.RequestHandler):
     async def post(self):
@@ -711,7 +763,8 @@ class Callback(tornado.web.RequestHandler):
                 clients[subscriptions[link]].write_message(json.dumps(data))
             # Push FCM notification if this is a send
             fcm_tokens = get_fcm_tokens(link)
-            if fcm_tokens is None or len(fcm_tokens) == 0:
+            fcm_tokens_v2 = get_fcm_tokens(link, v2=True)
+            if (fcm_tokens is None or len(fcm_tokens) == 0) and (fcm_tokens_v2 is None or len(fcm_tokens_v2) == 0):
                 return
             rpc = tornado.httpclient.AsyncHTTPClient()
             response = await rpc_request(rpc, json.dumps({"action":"block", "hash":data['block']['previous']}))
@@ -737,6 +790,20 @@ class Callback(tornado.web.RequestHandler):
                                     "amount": str(send_amount)
                                 },
                                 priority=aiofcm.PRIORITY_HIGH
+                    )
+                    await fcm.send_message(message)
+                notification_title = f"Received {NanoConversions.raw_to_nano(send_amount)} NANO"
+                notification_body = "Open Natrium to view this transaction."
+                for t2 in fcm_tokens_v2:
+                    message = aiofcm.Message(
+                        device_token = t2,
+                        notification = {
+                            "title":notification_title,
+                            "body":notification_body,
+                            "sound":"default",
+                            "tag":link
+                        },
+                        priority=aiofcm.PRIORITY_HIGH
                     )
                     await fcm.send_message(message)
         elif subscriptions.get(data['account']):
