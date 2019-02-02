@@ -792,7 +792,7 @@ class Callback(tornado.web.RequestHandler):
                                 priority=aiofcm.PRIORITY_HIGH
                     )
                     await fcm.send_message(message)
-                notification_title = f"Received {NanoConversions.raw_to_nano(send_amount)} NANO"
+                notification_title = f"Received {NanoConversions.raw_to_nano(send_amount):f} NANO"
                 notification_body = "Open Natrium to view this transaction."
                 for t2 in fcm_tokens_v2:
                     message = aiofcm.Message(
