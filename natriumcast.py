@@ -8,7 +8,9 @@ import sys
 import time
 import uuid
 from logging.handlers import WatchedFileHandler
+from os.path import split
 
+import aiofcm
 import redis
 import requests
 import tornado.gen
@@ -19,9 +21,7 @@ import tornado.web
 import tornado.websocket
 from bitstring import BitArray
 
-import aiofcm
 import natriumcast
-
 
 # future use for caching blocks
 # rblock  = redis.StrictRedis(host='localhost', port=6379, db=0)
@@ -723,14 +723,23 @@ class NanoConversions():
 
     @classmethod
     def minimalNumber(self, x):
-        if type(x) is str:
-            if x == '':
-                x = 0
-        f = float(x)
-        if f.is_integer():
-            return int(f)
-        else:
-            return round(f, 6)
+        strnum = '{0:.6f}'.format(x)
+        splitstr = strnum.split('.')
+        if len(splitstr) == 1:
+            return splitstr[0]
+        elif int(splitstr[1]) == 0:
+            return splitstr[0]
+        # Remove extra decimals
+        ret = splitstr[0] + "."
+        digits = splitstr[1]
+        endIndex = len(digits)
+        for i in range(1, len(digits) + 1):
+            if int(digits[len(digits) - i]) == 0:
+                endIndex-=1
+            else:
+                break
+        digits = digits[0:endIndex]
+        return ret + digits
 
     @classmethod
     def raw_to_nano(self, raw_amt):
@@ -792,7 +801,7 @@ class Callback(tornado.web.RequestHandler):
                                 priority=aiofcm.PRIORITY_HIGH
                     )
                     await fcm.send_message(message)
-                notification_title = f"Received {NanoConversions.raw_to_nano(send_amount):f} NANO"
+                notification_title = f"Received {NanoConversions.raw_to_nano(send_amount)} NANO"
                 notification_body = "Open Natrium to view this transaction."
                 for t2 in fcm_tokens_v2:
                     message = aiofcm.Message(
