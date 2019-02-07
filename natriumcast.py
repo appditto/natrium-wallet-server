@@ -794,8 +794,8 @@ class Callback(tornado.web.RequestHandler):
                 logging.info('push to client;' + json.dumps(data) + ';' + subscriptions[link])
                 clients[subscriptions[link]].write_message(json.dumps(data))
             # Push FCM notification if this is a send
-            fcm_tokens = get_fcm_tokens(link)
-            fcm_tokens_v2 = get_fcm_tokens(link, v2=True)
+            fcm_tokens = set(get_fcm_tokens(link))
+            fcm_tokens_v2 = set(get_fcm_tokens(link, v2=True))
             if (fcm_tokens is None or len(fcm_tokens) == 0) and (fcm_tokens_v2 is None or len(fcm_tokens_v2) == 0):
                 return
             rpc = tornado.httpclient.AsyncHTTPClient()
@@ -834,6 +834,9 @@ class Callback(tornado.web.RequestHandler):
                             "body":notification_body,
                             "sound":"default",
                             "tag":link
+                        },
+                        data = {
+                            "click_action": "FLUTTER_NOTIFICATION_CLICK"
                         },
                         priority=aiofcm.PRIORITY_HIGH
                     )
