@@ -553,8 +553,8 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                     # If account doesnt match the uuid self-heal
                     resubscribe = True
                     if 'uuid' in natriumcast_request and 'account' in natriumcast_request:
-                        account = rdata.hget(self.id, "account").decode('utf-8')
-                        if account is None or account.lower() != natriumcast_request['account'].lower():
+                        account = rdata.hget(natriumcast_request['uuid'], "account")
+                        if account is None or account.decode('utf-8').lower() != natriumcast_request['account'].lower():
                             resubscribe = False
                     # already subscribed, reconnect
                     if 'uuid' in natriumcast_request and resubscribe:
