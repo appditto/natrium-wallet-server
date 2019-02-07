@@ -7,8 +7,8 @@ import ssl
 import sys
 import time
 import uuid
-from logging.handlers import WatchedFileHandler
 from os.path import split
+from logging.handlers import WatchedFileHandler, TimedRotatingFileHandler
 
 import aiofcm
 import redis
@@ -71,7 +71,6 @@ active_messages = set()  # track messages in-flight - combats duplicate requests
 # track work requests active, eliminate client requesting multiples on the
 # same hash (drops work server efficiency as it hasnt had time to cache yet, this way it doesnt queue)
 active_work = set()
-
 
 def address_decode(address):
     # Given a string containing an XRB/NANO address, confirm validity and provide resulting hex address
@@ -860,6 +859,7 @@ if __name__ == "__main__":
     root = logging.getLogger()
     root.setLevel(os.environ.get("NANO_LOG_LEVEL", "INFO"))
     root.addHandler(handler)
+    root.addHandler(TimedRotatingFileHandler('natriumcast.log', when="d", interval=1, backupCount=100))
     print("[" + str(int(time.time())) + "] Starting NatriumCast Server...")
     logging.info('Starting NatriumCast Server')
     logging.getLogger('tornado.access').disabled = True
