@@ -102,8 +102,7 @@ def address_decode(address):
     return False
 
 def delete_fcm_token_for_account(account, token):
-    redisInst = rfcm if v2 else rdata
-    tokens = redisInst.get(account)
+    tokens = rfcm.get(account)
     if tokens is None:
         return None
     tokens = json.loads(tokens.decode('utf-8').replace('\'', '"'))
@@ -113,7 +112,7 @@ def delete_fcm_token_for_account(account, token):
     if 'data' not in tokens:
         return None
     for t in tokens['data']:
-        fcm_account = redisInst.get(t)
+        fcm_account = rfcm.get(t)
         if fcm_account is None:
             continue
         elif account != fcm_account.decode('utf-8'):
@@ -121,8 +120,8 @@ def delete_fcm_token_for_account(account, token):
         if t != token:
             new_token_list['data'].append(t)
         else:
-            redisInst.delete(t)
-    redisInst.set(account, new_token_list)
+            rfcm.delete(t)
+    rfcm.set(account, new_token_list)
     return new_token_list['data']
 
 def update_fcm_token_for_account(account, token, v2=False):
