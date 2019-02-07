@@ -102,9 +102,28 @@ def address_decode(address):
     return False
 
 def delete_fcm_token_for_account(account, token):
-    rfcm.delete(token)
-    # Delete all tokens associated with this account
-    rfcm.set(account, json.dumps({'data': []}))
+    redisInst = rfcm if v2 else rdata
+    tokens = redisInst.get(account)
+    if tokens is None:
+        return None
+    tokens = json.loads(tokens.decode('utf-8').replace('\'', '"'))
+    # Rebuild the list for this account removing the token that doesn't belong anymore
+    new_token_list = {}
+    new_token_list['data'] = []
+    if 'data' not in tokens:
+        return None
+    for t in tokens['data']:
+        fcm_account = redisInst.get(t)
+        if fcm_account is None:
+            continue
+        elif account != fcm_account.decode('utf-8'):
+            continue
+        if t != token:
+            new_token_list['data'].append(t)
+        else:
+            redisInst.delete(t)
+    redisInst.set(account, new_token_list)
+    return new_token_list['data']
 
 def update_fcm_token_for_account(account, token, v2=False):
     """Store device FCM registration tokens in redis"""
@@ -532,8 +551,14 @@ class WSHandler(tornado.websocket.WebSocketHandler):
 
                 # rpc: account_subscribe
                 if natriumcast_request['action'] == "account_subscribe":
+                    # If account doesnt match the uuid self-heal
+                    resubscribe = True
+                    if 'uuid' in natriumcast_request and 'account' in natriumcast_request:
+                        account = rdata.hget(self.id, "account").decode('utf-8')
+                        if account is None or account.lower() != natriumcast_request['account'].lower():
+                            resubscribe = False
                     # already subscribed, reconnect
-                    if 'uuid' in natriumcast_request:
+                    if 'uuid' in natriumcast_request and resubscribe:
                         del clients[self.id]
                         self.id = natriumcast_request['uuid']
                         clients[self.id] = self
