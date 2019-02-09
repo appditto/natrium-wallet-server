@@ -56,7 +56,7 @@ allowed_rpc_actions = ["account_balance", "account_block_count", "account_check"
                        "pending_exists", "price_data", "work_generate", "fcm_update"]
 
 # all currencies polled on CMC
-currency_list = ["BTC", "AUD", "BRL", "CAD", "CHF", "CLP", "CNY", "CZK", "DKK", "EUR", "GBP", "HKD", "HUF", "IDR",
+currency_list = ["BTC", "ARS", "AUD", "BRL", "CAD", "CHF", "CLP", "CNY", "CZK", "DKK", "EUR", "GBP", "HKD", "HUF", "IDR",
                  "ILS", "INR", "JPY", "KRW", "MXN", "MYR", "NOK", "NZD", "PHP", "PKR", "PLN", "RUB", "SEK", "SGD",
                  "THB", "TRY", "TWD", "USD", "VES", "ZAR"]
 
