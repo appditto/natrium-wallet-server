@@ -432,7 +432,7 @@ def rpc_subscribe(handler, account, currency):
         handler.write_message('{"error":"subscribe error"}')
     else:
         subscriptions[account] = handler.id
-        rdata.hset(handler.id, "account", account)
+        rdata.hset(handler.id, "account", json.dumps([account]))
         sub_pref_cur[handler.id] = currency
         rdata.hset(handler.id, "currency", currency)
         rdata.hset(handler.id, "last-connect", float(time.time()))
@@ -468,16 +468,9 @@ def get_pending_count(handler, account):
     return len(pending['blocks'])
 
 @tornado.gen.coroutine
-def rpc_reconnect(handler):
+def rpc_reconnect(handler, account):
     logging.info('reconnecting;' + handler.request.remote_ip + ';' + handler.id)
     rpc = tornado.httpclient.AsyncHTTPClient()
-    try:
-        account = rdata.hget(handler.id, "account").decode('utf-8')
-    except:
-        logging.error(
-            'reconnect error, account not seen on this server before;' + handler.request.remote_ip + ';' + handler.id)
-        handler.write_message('{"error":"reconnect error","detail":"account not seen on this server before"}')
-        return
 
     message = '{\"action\":\"account_info",\"account\":\"' + account + '\",\"pending\":true,\"representative\":true}'
     logging.info('sending request;' + message + ';' + handler.request.remote_ip + ';' + handler.id)
@@ -570,10 +563,28 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                 if natriumcast_request['action'] == "account_subscribe":
                     # If account doesnt match the uuid self-heal
                     resubscribe = True
-                    if 'uuid' in natriumcast_request and 'account' in natriumcast_request:
+                    if 'uuid' in natriumcast_request:
+                        # Perform multi-account upgrade if not already done
                         account = rdata.hget(natriumcast_request['uuid'], "account")
-                        if account is None or account.decode('utf-8').lower() != natriumcast_request['account'].lower():
+                        # No account for this uuid, first subscribe
+                        if account is None:
                             resubscribe = False
+                        else:
+                            # If account isn't stored in list-format, modify it so it is
+                            # If it already is, add this account to the list
+                            try:
+                                account_list = json.loads(account.decode('utf-8'))
+                                if 'account' in natriumcast_request and natriumcast_request['account'].lower() not in account_list:
+                                    account_list.append(natriumcast_request['account'].lower())
+                                    rdata.hset(natriumcast_request['uuid'], "account", json.dumps(account_list))
+                            except Exception as e:
+                                if 'account' in natriumcast_request and natriumcast_request['account'].lower() != account.decode('utf-8').lower():
+                                    resubscribe = False
+                                else:
+                                    # Perform upgrade to list style
+                                    account_list = []
+                                    account_list.append(account.decode('utf-8').lower())
+                                    rdata.hset(natriumcast_request['uuid'], "account", json.dumps(account_list))
                     # already subscribed, reconnect
                     if 'uuid' in natriumcast_request and resubscribe:
                         del clients[self.id]
@@ -593,21 +604,29 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                                     sub_pref_cur[self.id] = 'usd'
                                     rdata.hset(self.id, "currency", 'usd')
 
-                            rpc_reconnect(self)
+                            # Get relevant account
+                            account_list = json.loads(rdata.hget(self.id, "account").decode('utf-8'))
+                            if 'account' in natriumcast_request:
+                                account = natriumcast_request['account']
+                            else:
+                                # Legacy connections
+                                account = account_list[0]
+                            if 'nano_' in account:
+                                account_list.remove(account)
+                                account_list.append(account.replace("nano_", "xrb_"))
+                                account = account.replace('nano_', 'xrb_')
+                                rdata.hset(self.id, "account", json.dumps(account_list))
+                            rpc_reconnect(self, account)
                             rdata.rpush("conntrack",
                                         str(float(time.time())) + ":" + self.id + ":connect:" + self.request.remote_ip)
-                            # Store FCM token if available, for push notifications
-                            account = rdata.hget(self.id, "account").decode('utf-8')
-                            if 'nano_' in account:
-                                account.replace('nano_', 'xrb_')
-                                rdata.hset(self.id, "account", account)
+                            # Store FCM token for this account, for push notifications
                             if 'fcm_token' in natriumcast_request:
                                 update_fcm_token_for_account(account, natriumcast_request['fcm_token'])
                             elif 'fcm_token_v2' in natriumcast_request and 'notification_enabled' in natriumcast_request:
                                 if natriumcast_request['notification_enabled']:
-                                    update_fcm_token_for_account(rdata.hget(self.id, "account").decode('utf-8'), natriumcast_request['fcm_token_v2'], v2=True)
+                                    update_fcm_token_for_account(account, natriumcast_request['fcm_token_v2'], v2=True)
                                 else:
-                                    delete_fcm_token_for_account(rdata.hget(self.id, "account").decode('utf-8'), natriumcast_request['fcm_token_v2']) 
+                                    delete_fcm_token_for_account(account, natriumcast_request['fcm_token_v2']) 
                         except Exception as e:
                             logging.error('reconnect error;' + str(e) + ';' + self.request.remote_ip + ';' + self.id)
                             reply = {'error': 'reconnect error', 'detail': str(e)}
@@ -723,7 +742,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                         self.write_message('{"error":"pending rpc error","detail":"' + str(e) + '"}')
                 elif natriumcast_request['action'] == 'account_history':
                     if rdata.hget(self.id, "account") is None:
-                        rdata.hset(self.id, "account", natriumcast_request['account'])
+                        rdata.hset(self.id, "account", json.dumps([natriumcast_request['account']]))
                     try:
                         rpc_defer(self, json.dumps(natriumcast_request))
                     except Exception as e:
@@ -855,7 +874,8 @@ class Callback(tornado.web.RequestHandler):
                             "tag":link
                         },
                         data = {
-                            "click_action": "FLUTTER_NOTIFICATION_CLICK"
+                            "click_action": "FLUTTER_NOTIFICATION_CLICK",
+                            "account": link
                         },
                         priority=aiofcm.PRIORITY_HIGH
                     )
