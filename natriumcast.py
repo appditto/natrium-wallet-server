@@ -33,7 +33,6 @@ import natriumcast
 rfcm = redis.StrictRedis(host='localhost', port=6379, db=1)
 rdata = redis.StrictRedis(host='localhost', port=6379, db=2)  # used for price data and subscriber uuid info
 
-
 # get environment
 rpc_url = os.getenv('NANO_RPC_URL', 'http://127.0.0.1:7076')  # use env, else default to localhost rpc port
 callback_port = os.getenv('NANO_CALLBACK_PORT', 17076)
@@ -101,32 +100,12 @@ def address_decode(address):
     return False
 
 def delete_fcm_token_for_account(account, token):
-    tokens = rfcm.get(account)
-    if tokens is None:
-        return None
-    tokens = json.loads(tokens.decode('utf-8').replace('\'', '"'))
-    # Rebuild the list for this account removing the token that doesn't belong anymore
-    new_token_list = {}
-    new_token_list['data'] = []
-    if 'data' not in tokens:
-        return None
-    for t in tokens['data']:
-        fcm_account = rfcm.get(t)
-        if fcm_account is None:
-            continue
-        elif account != fcm_account.decode('utf-8'):
-            continue
-        if t != token:
-            new_token_list['data'].append(t)
-        else:
-            rfcm.delete(t)
-    rfcm.set(account, new_token_list)
-    return new_token_list['data']
+    rfcm.delete(token)
 
 def update_fcm_token_for_account(account, token, v2=False):
     """Store device FCM registration tokens in redis"""
     redisInst = rfcm if v2 else rdata
-    redisInst.set(token, account, ex=2592000) # Expire after 30-day inactivity
+    set_or_upgrade_token_account_list(account, token, v2=v2)
     # Keep a list of tokens associated with this account
     cur_list = redisInst.get(account)
     if cur_list is not None:
@@ -138,6 +117,38 @@ def update_fcm_token_for_account(account, token, v2=False):
     if token not in cur_list['data']:
         cur_list['data'].append(token)
     redisInst.set(account, json.dumps(cur_list))
+
+def get_or_upgrade_token_account_list(account, token, v2=False):
+    redisInst = rfcm if v2 else rdata
+    curTokenList = redisInst.get(token)
+    if curTokenList is None:
+        []
+    else:
+        try:
+            curToken = json.loads(curTokenList.decode('utf-8'))
+            return curToken
+        except Exception as e:
+            curToken = curTokenList.decode('utf-8')
+            redisInst.set(token, json.dumps([curToken]), ex=2592000)
+            if account != curToken:
+                return []
+    return json.loads(redisInst.get(token).decode('utf-8'))
+
+def set_or_upgrade_token_account_list(account, token, v2=False):
+    redisInst = rfcm if v2 else rdata
+    curTokenList = redisInst.get(token)
+    if curTokenList is None:
+        redisInst.set(token, json.dumps([account]), ex=2592000) 
+    else:
+        try:
+            curToken = json.loads(curTokenList.decode('utf-8'))
+            if account not in curToken:
+                curToken.append(account)
+                redisInst.set(token, json.dumps(curToken), ex=2592000)
+        except Exception as e:
+            curToken = curTokenList.decode('utf-8')
+            redisInst.set(token, json.dumps([curToken]), ex=2592000)
+    return json.loads(redisInst.get(token).decode('utf-8'))
 
 def get_fcm_tokens(account, v2=False):
     """Return list of FCM tokens that belong to this account"""
@@ -152,10 +163,8 @@ def get_fcm_tokens(account, v2=False):
     if 'data' not in tokens:
         return []
     for t in tokens['data']:
-        fcm_account = redisInst.get(t)
-        if fcm_account is None:
-            continue
-        elif account != fcm_account.decode('utf-8'):
+        account_list = get_or_upgrade_token_account_list(account, t, v2=v2)
+        if account not in account_list:
             continue
         new_token_list['data'].append(t)
     redisInst.set(account, new_token_list)
