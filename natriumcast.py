@@ -910,7 +910,7 @@ if __name__ == "__main__":
     root = logging.getLogger()
     root.setLevel(os.environ.get("NANO_LOG_LEVEL", "INFO"))
     root.addHandler(handler)
-    root.addHandler(TimedRotatingFileHandler('natriumcast.log', when="d", interval=1, backupCount=100))
+    root.addHandler(TimedRotatingFileHandler(os.environ.get("NANO_LOG_FILE", "natriumcast.log"), when="d", interval=1, backupCount=100))
     print("[" + str(int(time.time())) + "] Starting NatriumCast Server...")
     logging.info('Starting NatriumCast Server')
     logging.getLogger('tornado.access').disabled = True
