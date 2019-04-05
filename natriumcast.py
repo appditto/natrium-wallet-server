@@ -49,7 +49,7 @@ dpow_key = os.getenv('NANO_DPOW_KEY', None)
 allowed_rpc_actions = ["account_balance", "account_block_count", "account_check", "account_info", "account_history",
                        "account_representative", "account_subscribe", "account_weight", "accounts_balances",
                        "accounts_frontiers", "accounts_pending", "available_supply", "block", "block_hash",
-                       "block_create", "blocks", "blocks_info", "block_account", "block_count", "block_count_type",
+                       "block_create", "blocks", "block_info", "blocks_info", "block_account", "block_count", "block_count_type",
                        "chain", "delegators", "delegators_count", "frontiers", "frontier_count", "history",
                        "key_expand", "process", "representatives", "republish", "peers", "version", "pending",
                        "pending_exists", "price_data", "work_generate", "fcm_update"]
