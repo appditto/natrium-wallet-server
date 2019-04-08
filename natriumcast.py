@@ -122,7 +122,7 @@ def get_or_upgrade_token_account_list(account, token, v2=False):
     redisInst = rfcm if v2 else rdata
     curTokenList = redisInst.get(token)
     if curTokenList is None:
-        []
+        return []
     else:
         try:
             curToken = json.loads(curTokenList.decode('utf-8'))
