@@ -37,6 +37,7 @@ rdata = redis.StrictRedis(host='localhost', port=6379, db=2)  # used for price d
 rpc_url = os.getenv('NANO_RPC_URL', 'http://127.0.0.1:7076')  # use env, else default to localhost rpc port
 callback_port = os.getenv('NANO_CALLBACK_PORT', 17076)
 socket_port = os.getenv('NANO_SOCKET_PORT', 443)
+api_port = os.getenv('NANO_API_PORT', 7776)
 cert_dir = os.getenv('NANO_CERT_DIR')  # use /home/username instead of /home/username/
 cert_key_file = os.getenv('NANO_KEY_FILE')  # TLS certificate private key
 cert_crt_file = os.getenv('NANO_CRT_FILE')  # full TLS certificate bundle
@@ -231,7 +232,7 @@ def rpc_defer(handler, message):
 # most valuable to least valuable. Finally, to save the client processing burden and give the server room to breathe,
 # we return only the top 10.
 @tornado.gen.coroutine
-def pending_defer(handler, request):
+def pending_defer(handler, request, is_socket=True):
     rpc = tornado.httpclient.AsyncHTTPClient()
     requested = json.loads(request)
     response = yield rpc_request(rpc, request)
@@ -239,7 +240,10 @@ def pending_defer(handler, request):
     if response.error:
         logging.error('pending defer request failure;' + str(
             response.error) + ';' + rpc_url + ';' + request + ';' + handler.request.remote_ip + ';' + handler.id)
-        reply = "pending defer error"
+        if is_socket:
+            reply = "pending defer error"
+        else:
+            return None
     else:
         data = json.loads(response.body.decode('ascii'))
         # sort dict keys by amount value within, descending
@@ -261,7 +265,10 @@ def pending_defer(handler, request):
             strclean(reply)) + ';' + rpc_url + ';' + handler.request.remote_ip + ';' + handler.id)
 
     # return to client
-    handler.write_message(reply)
+    if is_socket:
+        handler.write_message(reply)
+    else:
+        return newdict
 
 
 def pubkey(address):
@@ -281,7 +288,7 @@ def pubkey(address):
 # Check blocks submitted for processing to ensure the user or client has not accidentally created a send to an unknown
 # address due to balance miscalculation leading to the state block being interpreted as a send rather than a receive.
 @tornado.gen.coroutine
-def process_defer(handler, block, do_work):
+def process_defer(handler, block, do_work, is_socket=True):
     rpc = tornado.httpclient.AsyncHTTPClient()
 
     # Let's cache the link because, due to callback delay it's possible a client can receive
@@ -325,8 +332,11 @@ def process_defer(handler, block, do_work):
                         logging.error(
                             'rpc process receive race condition detected;' + handler.request.remote_ip +
                             ';' + handler.id + ';User-Agent:' + str(handler.request.headers.get('User-Agent')))
-                        handler.write_message('{"error":"receive race condition detected"}')
-                        return
+                        if is_socket:
+                            handler.write_message('{"error":"receive race condition detected"}')
+                            return
+                        else:
+                            return None
             except:
                 # no contents, means an error was returned for previous block. no action needed
                 if 'error' not in prev_response:
@@ -353,22 +363,46 @@ def process_defer(handler, block, do_work):
                 'hash': workbase
             }))
             if work_response.error:
-                handler.write_message('{"error":"Failed work_generate in process request"}')
-                return
+                if is_socket:
+                    handler.write_message('{"error":"Failed work_generate in process request"}')
+                    return
+                else:
+                    return None
             work_response = json.loads(work_response.body.decode('ascii'))
             if 'work' not in work_response:
-                handler.write_message('{"error":"work response came back empty"}')
-                return
+                if is_socket:
+                    handler.write_message('{"error":"work response came back empty"}')
+                    return
+                else:
+                    return None
             block['work'] = work_response['work']
         except Exception as e:
             logging.exception(e)
-            handler.write_message('{"error":"Failed work_generate in process request"}')
-            return
+            if is_socket:
+                handler.write_message('{"error":"Failed work_generate in process request"}')
+                return
+            else:
+                return None
 
-    yield rpc_defer(handler, json.dumps({
-        'action': 'process',
-        'block': json.dumps(block)
-    }))
+    if is_socket:
+        yield rpc_defer(handler, json.dumps({
+            'action': 'process',
+            'block': json.dumps(block)
+        }))
+    else:
+        try:
+            resp = yield rpc_request(
+                rpc,
+                json.dumps({
+                    'action': 'process',
+                    'block': json.dumps(block)
+                })
+            )
+            if resp.error:
+                return None
+            return json.loads(resp.body.decode('ascii'))
+        except Exception:
+            return None
 
 
 @tornado.gen.coroutine
@@ -895,12 +929,106 @@ class Callback(tornado.web.RequestHandler):
             clients[subscriptions[data['account']]].write_message(json.dumps(data))
 
 
+class HTTPApi(tornado.web.RequestHandler):
+    async def post(self):
+        try:
+            data = self.request.body.decode('utf-8')
+            natriumcast_request = json.loads(data)
+            if natriumcast_request['action'] in allowed_rpc_actions and natriumcast_request['action'] != 'work_generate':
+                if 'request_id' in natriumcast_request:
+                    requestid = natriumcast_request['request_id']
+                else:
+                    requestid = None
+
+                # rpc: process
+                if natriumcast_request['action'] == "process":
+                    try:
+                        do_work = False
+                        if 'do_work' in natriumcast_request and natriumcast_request['do_work'] == True:
+                            do_work = True
+                        resp = process_defer(self, json.loads(natriumcast_request['block']), do_work, is_socket=False)
+                        if resp is None:
+                            raise Exception
+                        self.set_status(200)
+                        self.finish(resp)
+                        return
+                    except Exception as e:
+                        logging.error('process rpc error;' + str(
+                            e) + ';' + self.request.remote_ip + ';' + self.id + ';User-Agent:' + str(
+                            self.request.headers.get('User-Agent')))
+                        self.set_status(500)
+                        self.finish({'error':'process rpc error', 'detail':str(e)})
+                        return
+                # rpc: pending
+                elif natriumcast_request['action'] == "pending":
+                    try:
+                        resp = pending_defer(self, json.dumps(natriumcast_request), is_socket = False)
+                        if resp is None:
+                            raise Exception
+                        self.set_status(200)
+                        self.finish(resp)
+                        return
+                    except Exception as e:
+                        logging.error('pending rpc error;' + str(
+                            e) + ';' + self.request.remote_ip + ';' + self.id + ';User-Agent:' + str(
+                            self.request.headers.get('User-Agent')))
+                        self.set_status(500)
+                        self.finish({"error":"pending rpc error","detail":str(e)})
+                        return
+                elif natriumcast_request['action'] == 'account_history':
+                    if rdata.hget(self.id, "account") is None:
+                        rdata.hset(self.id, "account", json.dumps([natriumcast_request['account']]))
+                    try:
+                        rpc = tornado.httpclient.AsyncHTTPClient()
+                        resp = yield rpc_request(rpc, json.dumps(natriumcast_request))
+                        if resp is None or resp.error:
+                            raise Exception
+                        resp = json.loads(resp.body.decode('ascii'))
+                        self.set_status(200)
+                        self.finish(resp)
+                        return
+                    except Exception as e:
+                        logging.error('rpc error;' + str(e) + ';' + self.request.remote_ip + ';' + self.id)
+                        self.write_message('{"error":"rpc error","detail":"' + str(e) + '"}')
+
+                # rpc: fallthrough and error catch
+                else:
+                    try:
+                        rpc = tornado.httpclient.AsyncHTTPClient()
+                        resp = yield rpc_request(rpc, json.dumps(natriumcast_request))
+                        if resp is None or resp.error:
+                            raise Exception
+                        resp = json.loads(resp.body.decode('ascii'))
+                        self.set_status(200)
+                        self.finish(resp)
+                        return
+                    except Exception as e:
+                        logging.error('rpc error;' + str(e) + ';' + self.request.remote_ip + ';' + self.id)
+                        self.set_status(500)
+                        self.finish({"error":"rpc error","detail":str(e)})
+                        return
+            else:
+                logging.error(
+                    'rpc not allowed;' + natriumcast_request['action'] + ';' + self.request.remote_ip + ';' + self.id)
+                self.set_status(400)
+                self.finish({"error":"rpc command not allowed"})
+                return
+        except Exception as e:
+            logging.error('uncaught error;' + str(e) + ';' + self.request.remote_ip + ';' + self.id)
+            self.set_status(500)
+            self.finish({"error":"general error","detail":str(e) })
+            return
+
 application = tornado.web.Application([
     (r"/", WSHandler),
 ])
 
 nodecallback = tornado.web.Application([
     (r"/", Callback),
+])
+
+apilistener = tornado.web.Application([
+    (r"/", HTTPApi),
 ])
 
 if __name__ == "__main__":
@@ -926,6 +1054,9 @@ if __name__ == "__main__":
     # 	"callback_address": "127.0.0.1",
     # 	"callback_port": "17076",
     # 	"callback_target": "/"
+
+    # For standard HTTP RPC requests
+    apilistener.listen(api_port)
 
     # push latest price data to all subscribers every minute
     tornado.ioloop.PeriodicCallback(send_prices, 60000).start()
