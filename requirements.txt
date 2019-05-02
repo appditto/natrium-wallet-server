@@ -1,6 +1,7 @@
 requests
 certifi
-redis
-tornado 
+aioredis
+aiohttp 
 bitstring
 aiofcm
+python-dotenv
