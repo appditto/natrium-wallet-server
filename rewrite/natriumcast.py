@@ -1,19 +1,45 @@
-import uuid
+#!/usr/bin/env python
+import argparse
 import asyncio
-import os
+import ipaddress
 import json
 import logging
+import os
+import sys
 import time
+import uuid
 from logging.handlers import WatchedFileHandler, TimedRotatingFileHandler
-import aioredis
+
+from aioredis import create_redis
 from aiohttp import ClientSession, log, web, WSMsgType
 
-# get environment
-rpc_url = os.getenv('NANO_RPC_URL', 'http://127.0.0.1:7076') 
-app_port = os.getenv('NANO_SERVER_PORT', 5076)
+# Configuration arguments
+
+parser = argparse.ArgumentParser(description="Natrium/Kalium Wallet Server")
+parser.add_argument('-b', '--banano', action='store_true', help='Run for BANANO (Kalium-mode)', default=False)
+parser.add_argument('-l', '--host', type=str, help='Host to listen on (e.g. 127.0.0.1)', default='127.0.0.1')
+parser.add_argument('-p', '--port', type=int, help='Port to listen on', default=5076)
+options = parser.parse_args()
+
+try:
+    listen_host = str(ipaddress.ip_address(options.host))
+    listen_port = int(options.port)
+    if options.banano:
+        banano_mode = True
+        print(f'Starting KALIUM Server (BANANO) on {listen_host} port {listen_port}')
+    else:
+        banano_mode = False
+        print(f'Starting NATRIUM Server (NANO) on {listen_host} port {listen_port}')
+except Exception:
+    parser.print_help()
+    sys.exit(0)
+
+# Environment configuration
+
+rpc_url = os.getenv('RPC_URL', 'http://[::1]:7076')
 fcm_api_key = os.getenv('FCM_API_KEY')
 fcm_sender_id = os.getenv('FCM_SENDER_ID')
-debug_mode = os.getenv('DEBUG', 1)
+debug_mode = True if os.getenv('DEBUG', 1) != 0 else False
 
 loop = asyncio.get_event_loop()
 
@@ -62,8 +88,81 @@ async def get_pending_count(r, account, uid = 0):
     response = await json_post(message)
     if response is None or 'blocks' not in response:
         return 0
+    log.server_logger.debug('received response for pending %s', json.dumps(response))        
     return len(response['blocks'])
 
+# Push notifications
+
+async def delete_fcm_token_for_account(account, token, r):
+    await r.app['rfcm'].delete(token)
+
+async def update_fcm_token_for_account(account, token, r, v2=False):
+    """Store device FCM registration tokens in redis"""
+    redisInst = r.app['rfcm'] if v2 else r.app['rdata']
+    await set_or_upgrade_token_account_list(account, token, r, v2=v2)
+    # Keep a list of tokens associated with this account
+    cur_list = await redisInst.get(account)
+    if cur_list is not None:
+        cur_list = json.loads(cur_list.replace('\'', '"'))
+    else:
+        cur_list = {}
+    if 'data' not in cur_list:
+        cur_list['data'] = []
+    if token not in cur_list['data']:
+        cur_list['data'].append(token)
+    await redisInst.set(account, json.dumps(cur_list))
+
+async def get_or_upgrade_token_account_list(account, token, r, v2=False):
+    redisInst = r.app['rfcm'] if v2 else r.app['rdata']
+    curTokenList = await redisInst.get(token)
+    if curTokenList is None:
+        return []
+    else:
+        try:
+            curToken = json.loads(curTokenList)
+            return curToken
+        except Exception as e:
+            curToken = curTokenList
+            await redisInst.set(token, json.dumps([curToken]), expire=2592000)
+            if account != curToken:
+                return []
+    return json.loads(await redisInst.get(token))
+
+async def set_or_upgrade_token_account_list(account, token, r, v2=False):
+    redisInst = r.app['rfcm'] if v2 else r.app['rdata']
+    curTokenList = await redisInst.get(token)
+    if curTokenList is None:
+        await redisInst.set(token, json.dumps([account]), expire=2592000) 
+    else:
+        try:
+            curToken = json.loads(curTokenList)
+            if account not in curToken:
+                curToken.append(account)
+                await redisInst.set(token, json.dumps(curToken), expire=2592000)
+        except Exception as e:
+            curToken = curTokenList
+            await redisInst.set(token, json.dumps([curToken]), expire=2592000)
+    return json.loads(await redisInst.get(token))
+
+async def get_fcm_tokens(account, r, v2=False):
+    """Return list of FCM tokens that belong to this account"""
+    redisInst = r.app['rfcm'] if v2 else r.app['rdata']
+    tokens = await redisInst.get(account)
+    if tokens is None:
+        return []
+    tokens = json.loads(tokens.replace('\'', '"'))
+    # Rebuild the list for this account removing tokens that dont belong anymore
+    new_token_list = {}
+    new_token_list['data'] = []
+    if 'data' not in tokens:
+        return []
+    for t in tokens['data']:
+        account_list = await get_or_upgrade_token_account_list(account, t, v2=v2)
+        if account not in account_list:
+            continue
+        new_token_list['data'].append(t)
+    await redisInst.set(account, new_token_list)
+    return new_token_list['data']
 
 ### END Utility functions
 
@@ -84,6 +183,7 @@ async def rpc_reconnect(ws, r, account):
         log.server_logger.error('reconnect error; %s ; %s', get_request_ip(r), ws.id)
         ws.send_str('{"error":"reconnect error"}')
     else:
+        log.server_logger.debug('received response for account_info %s', json.dumps(response))     
         if account in r.app['subscriptions']:
             r.app['subscriptions'][account].add(ws.id)
         else:
@@ -121,6 +221,7 @@ async def rpc_subscribe(ws, r, account, currency):
         log.server_logger.error('reconnect error; %s ; %s', get_request_ip(r), ws.id)
         ws.send_str('{"error":"subscribe error"}')
     else:
+        log.server_logger.debug('received response for account_info %s', json.dumps(response))     
         if account in r.app['subscriptions']:
             r.app['subscriptions'][account].add(ws.id)
         else:
@@ -239,15 +340,12 @@ async def handle_user_message(r, msg, ws=None):
                                     str(float(time.time())) + ":" + uid + ":connect:" + address)
                         # Store FCM token for this account, for push notifications
                         if 'fcm_token' in request_json:
-                            pass
-                            #update_fcm_token_for_account(account, natriumcast_request['fcm_token'])
+                            await update_fcm_token_for_account(account, request_json['fcm_token'], r)
                         elif 'fcm_token_v2' in request_json and 'notification_enabled' in request_json:
                             if request_json['notification_enabled']:
-                                pass
-                                #update_fcm_token_for_account(account, natriumcast_request['fcm_token_v2'], v2=True)
+                                await update_fcm_token_for_account(account, request_json['fcm_token_v2'], r, v2=True)
                             else:
-                                pass
-                                #delete_fcm_token_for_account(account, natriumcast_request['fcm_token_v2']) 
+                                await delete_fcm_token_for_account(account, request_json['fcm_token_v2'], r) 
                     except Exception as e:
                         log.server_logger.error('reconnect error; %s; %s; %s', str(e), address, uid)
                         reply = {'error': 'reconnect error', 'detail': str(e)}
@@ -265,20 +363,24 @@ async def handle_user_message(r, msg, ws=None):
                             await r.app['rdata'].rpush(f"conntrack {str(float(time.time()))}:{uid}:connect:{address}")
                             # Store FCM token if available, for push notifications
                             if 'fcm_token' in request_json:
-                                pass
-                                #update_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token'])
+                                await update_fcm_token_for_account(request_json['account'], request_json['fcm_token'], r)
                             elif 'fcm_token_v2' in request_json and 'notification_enabled' in request_json:
                                 if request_json['notification_enabled']:
-                                    pass
-                                    #update_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token_v2'], v2=True)
+                                    await update_fcm_token_for_account(request_json['account'], request_json['fcm_token_v2'], r, v2=True)
                                 else:
-                                    pass
-                                    #delete_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token_v2'])
+                                    await delete_fcm_token_for_account(request_json['account'], request_json['fcm_token_v2'], r)
                     except Exception as e:
                         log.server_logger.error('subscribe error;%s;%s;%s', str(e), address, uid)
                         reply = {'error': 'subscribe error', 'detail': str(e)}
                         if requestid is not None: reply['request_id'] = requestid
                         return json.dumps(reply)
+            elif request_json['action'] == "fcm_update":
+                # Updating FCM token
+                if 'fcm_token_v2' in request_json and 'account' in request_json and 'enabled' in request_json:
+                    if request_json['enabled']:
+                        await update_fcm_token_for_account(request_json['account'], request_json['fcm_token_v2'], r, v2=True)
+                    else:
+                        await delete_fcm_token_for_account(request_json['account'], request_json['fcm_token_v2'], r)
     except Exception:
         pass
 
@@ -337,9 +439,9 @@ async def init_app():
     async def open_redis(app):
         """Open redis connections"""
         log.server_logger.info("Opening redis connections")
-        app['rfcm'] = await aioredis.create_redis(('localhost', 6379),
+        app['rfcm'] = await create_redis(('localhost', 6379),
                                                 db=1, encoding='utf-8')
-        app['rdata'] = await aioredis.create_redis(('localhost', 6379),
+        app['rdata'] = await create_redis(('localhost', 6379),
                                                 db=2, encoding='utf-8')
         # Global vars
         app['clients'] = {} # Keep track of connected clients
@@ -349,7 +451,7 @@ async def init_app():
         app['subscriptions'] = {} # Store subscription UUIDs, this is used for targeting callback accounts
 
     # Setup logger
-    if debug_mode > 0:
+    if debug_mode:
         logging.basicConfig(level='DEBUG')
     else:
         root = log.server_logger.getLogger()
@@ -380,7 +482,7 @@ def main():
     async def start():
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, '127.0.0.1', app_port)
+        site = web.TCPSite(runner, listen_host, listen_port)
         await site.start()
 
     async def end():
