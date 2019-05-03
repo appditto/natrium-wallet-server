@@ -31,6 +31,7 @@ currency_list = ["BTC", "ARS", "AUD", "BRL", "CAD", "CHF", "CLP", "CNY", "CZK", 
                  "ILS", "INR", "JPY", "KRW", "MXN", "MYR", "NOK", "NZD", "PHP", "PKR", "PLN", "RUB", "SEK", "SGD",
                  "THB", "TRY", "TWD", "USD", "VES", "ZAR"]
 
+
 # Utility functions
 def get_request_ip(r):
     host = r.headers.get('X-FORWARDED-FOR',None)
@@ -40,24 +41,128 @@ def get_request_ip(r):
             host, port = peername
     return host
 
-# Primary handler for all websocket connections
-async def handle_user_message(ws, r, msg):
-    """Process data sent by client"""
+async def json_post(request_json, timeout=30):
+    try:
+        async with ClientSession() as session:
+            async with session.post(rpc_url, json=request_json, timeout=timeout) as resp:
+                return await resp.json(content_type=None)
+    except Exception:
+        log.server_logger.exception()
+        return None
 
+async def get_pending_count(r, account, uid = 0):
+    """This returns how many pending blocks an account has, up to 51, for anti-spam measures"""
+    message = {
+        "action":"pending",
+        "account":account,
+        "threshold":str(10**24),
+        "count":51
+    }
+    log.server_logger.info('sending get_pending_count; %s; %s', get_request_ip(r), uid)
+    response = await json_post(message)
+    if response is None or 'blocks' not in response:
+        return 0
+    return len(response['blocks'])
+
+
+### END Utility functions
+
+async def rpc_reconnect(ws, r, account):
+    """When a websocket connection sends a subscribe request, do this reconnection step"""
+    log.server_logger.info('reconnecting;' + get_request_ip(r) + ';' + ws.id)
+
+    rpc = {
+        "action":"account_info",
+        "account":"account",
+        "pending":True,
+        "representative": True
+    }
+    log.server_logger.info('sending account_info %s', account)
+    response = await json_post(rpc)
+
+    if response is None or 'frontier' not in response:
+        log.server_logger.error('reconnect error; %s ; %s', get_request_ip(r), ws.id)
+        ws.send_str('{"error":"reconnect error"}')
+    else:
+        if account in r.app['subscriptions']:
+            r.app['subscriptions'][account].add(ws.id)
+        else:
+            r.app['subscriptions'][account] = set()
+            r.app['subscriptions'][account].add(ws.id)
+        r.app['cur_prefs'][handler.id] = await r.app['rdata'].hget(ws.id, "currency")
+        await r.app['rdata'].hset(ws.id, "last-connect", float(time.time()))
+        price_cur = await r.app['rdata'].hget("prices", "coingecko:nano-" + r.app['cur_prefs'][ws.id].lower())
+        price_btc = await r.app['rdata'].hget("prices", "coingecko:nano-btc")
+        response['currency'] = r.app['cur_prefs'][ws.id].lower()
+        response['price'] = float(price_cur)
+        response['btc'] = float(price_btc)
+        response['pending_count'] = await get_pending_count(r, account, uid = ws.id)
+        response = json.dumps(response)
+
+        log.server_logger.info(
+            'reconnect response sent ; %s bytes; %s; %s', str(len(response)), get_request_ip(r), ws.id)
+
+        await ws.send_str(response)
+
+async def rpc_subscribe(ws, r, account, currency):
+    """Clients subscribing for the first time"""
+    logging.info('subscribing;%s;%s', get_request_ip(r), ws.id)
+
+    rpc = {
+        'action':'account_info',
+        'account':account,
+        'pending':True,
+        'representative':True
+    }
+    log.server_logger.info('sending account_info;%s;%s', get_request_ip, ws.id)
+    response = await json_post(rpc)
+
+    if response is None or 'frontier' not in response:
+        log.server_logger.error('reconnect error; %s ; %s', get_request_ip(r), ws.id)
+        ws.send_str('{"error":"subscribe error"}')
+    else:
+        if account in r.app['subscriptions']:
+            r.app['subscriptions'][account].add(ws.id)
+        else:
+            r.app['subscriptions'][account] = set()
+            r.app['subscriptions'][account].add(ws.id)
+        await r.app['rdata'].hset(ws.id, "account", json.dumps([account]))
+        r.app['cur_prefs'][ws.id] = currency
+        await r.app['rdata'].hset(ws.id, "currency", currency)
+        await r.app['rdata'].hset(ws.id, "last-connect", float(time.time()))
+        response['uuid'] = ws.id
+        price_cur = await r.app['rdata'].hget("prices", "coingecko:nano-" + r.app['cur_prefs'][ws.id].lower())
+        price_btc = await r.app['rdata'].hget("prices", "coingecko:nano-btc")
+        response['currency'] = r.app['cur_prefs'][ws.id].lower()
+        response['price'] = float(price_cur)
+        response['btc'] = float(price_btc)
+        response['pending_count'] = await get_pending_count(r, account)
+        response = json.dumps(response)
+
+        log.server_logger.info(
+            'subscribe response sent ; %s bytes; %s; %s', str(len(response)), get_request_ip(r), ws.id)
+
+        ws.send_str(response)
+
+# Primary handler for all websocket connections
+async def handle_user_message(r, msg, ws=None):
+    """Process data sent by client"""
     address = get_request_ip(r)
     message = msg.data
+    uid = ws.id if ws is not None else 0
     now = int(round(time.time() * 1000))
     if address in r.app['last_msg']:
         if (now - r.app['last_msg'][address]) < 25:
-            logging.error('client messaging too quickly: ' + str(
-                now - r.app['last_msg'][address]) + 'ms;' + address + ';' + ws.id + ';User-Agent:' + str(
+            log.server_logger.error('client messaging too quickly: %s ms; %s; %s; User-Agent: %s', str(
+                now - r.app['last_msg'][address]), address, uid, str(
                 r.headers.get('User-Agent')))
+            return
     r.app['last_msg'][address] = now
-    logging.info('request;' + message + ';' + address + ';' + ws.id)
+    log.server_logger.info('request; %s, %s, %s', message, address, uid)
     if message not in r.app['active_messages']:
         r.app['active_messages'].add(message)
     else:
-        logging.error('request already active;' + message + ';' + address + ';' + ws.id)
+        log.server_logger.error('request already active; %s; %s; %s', message, address, uid)
         return
     try:
         request_json = json.loads(message)
@@ -67,16 +172,13 @@ async def handle_user_message(ws, r, msg):
             else:
                 requestid = None
 
-            # adjust counts so nobody can block the node with a huge request - disregard, we have three nodes to
-            # load balance
+            # adjust counts so nobody can block the node with a huge request
+            if 'count' in request_json:
+                if (request_json['count'] < 0) or (request_json['count'] > 3500):
+                    request_json['count'] = 3500
 
-            # if 'count' in natriumcast_request:
-            # if (natriumcast_request['count'] < 0) or (natriumcast_request['count'] > 1000):
-            #     natriumcast_request['count'] = 1000
-            #     logging.info('requested count is <0 or >1000, correcting to 1000;'+self.request.remote_ip+';'+self.id)
-
-            # rpc: account_subscribe
-            if request_json['action'] == "account_subscribe":
+            # rpc: account_subscribe (only applies to websocket connections)
+            if request_json['action'] == "account_subscribe" and ws is not None:
                 # If account doesnt match the uuid self-heal
                 resubscribe = True
                 if 'uuid' in request_json:
@@ -101,27 +203,27 @@ async def handle_user_message(ws, r, msg):
                                 account_list = []
                                 account_list.append(account.decode('utf-8').lower())
                                 await r.app['rdata'].hset(request_json['uuid'], "account", json.dumps(account_list))
-                # already subscribed, reconnect
+                # already subscribed, reconnect (websocket connections)
                 if 'uuid' in request_json and resubscribe:
-                    del r.app['clients'][ws.id]
-                    ws.id = request_json['uuid']
-                    r.app['clients'][ws.id] = ws
-                    log.server_logger.info('reconnection request;' + address + ';' + ws.id)
+                    del r.app['clients'][uid]
+                    uid = request_json['uuid']
+                    r.app['clients'][uid] = ws
+                    log.server_logger.info('reconnection request;' + address + ';' + uid)
                     try:
                         if 'currency' in request_json and request_json['currency'] in currency_list:
                             currency = request_json['currency']
-                            r.app['cur_prefs'][ws.id] = currency
-                            await r.app['rdata'].hset(ws.id, "currency", currency)
+                            r.app['cur_prefs'][uid] = currency
+                            await r.app['rdata'].hset(uid, "currency", currency)
                         else:
-                            setting = await r.app['rdata'].hget(ws.id, "currency")
+                            setting = await r.app['rdata'].hget(uid, "currency")
                             if setting is not None:
-                                r.app['cur_prefs'][ws.id] = setting
+                                r.app['cur_prefs'][uid] = setting
                             else:
-                                r.app['cur_prefs'][ws.id] = 'usd'
-                                await r.app['rdata'].hset(ws.id, "currency", 'usd')
+                                r.app['cur_prefs'][uid] = 'usd'
+                                await r.app['rdata'].hset(uid, "currency", 'usd')
 
                         # Get relevant account
-                        account_list = json.loads(await r.app['rdata'].hget(ws.id, "account").decode('utf-8'))
+                        account_list = json.loads(await r.app['rdata'].hget(uid, "account").decode('utf-8'))
                         if 'account' in request_json:
                             account = request_json['account']
                         else:
@@ -131,10 +233,10 @@ async def handle_user_message(ws, r, msg):
                             account_list.remove(account)
                             account_list.append(account.replace("nano_", "xrb_"))
                             account = account.replace('nano_', 'xrb_')
-                            await r.app['rdata'].hset(ws.id, "account", json.dumps(account_list))
-                        # rpc_reconnect(ws, account) // TODO implement
+                            await r.app['rdata'].hset(uid, "account", json.dumps(account_list))
+                        await rpc_reconnect(ws, r, account)
                         await r.app['rdata'].rpush("conntrack",
-                                    str(float(time.time())) + ":" + ws.id + ":connect:" + address)
+                                    str(float(time.time())) + ":" + uid + ":connect:" + address)
                         # Store FCM token for this account, for push notifications
                         if 'fcm_token' in request_json:
                             pass
@@ -147,14 +249,36 @@ async def handle_user_message(ws, r, msg):
                                 pass
                                 #delete_fcm_token_for_account(account, natriumcast_request['fcm_token_v2']) 
                     except Exception as e:
-                        log.server_logger.error('reconnect error;' + str(e) + ';' + address + ';' + ws.id)
+                        log.server_logger.error('reconnect error; %s; %s; %s', str(e), address, uid)
                         reply = {'error': 'reconnect error', 'detail': str(e)}
                         if requestid is not None: reply['request_id'] = requestid
-                        await ws.send_str(json.dumps(reply))
+                        return json.dumps(reply)
                 # new user, setup uuid(or use existing if available) and account info
                 else:
-                    # TODO
-                    pass
+                    log.server_logger.info('subscribe request; %s; %s', get_request_ip(r), uid)
+                    try:
+                        if 'currency' in request_json and request_json['currency'] in currency_list:
+                            currency = request_json['currency']
+                        else:
+                            currency = 'usd'
+                            await rpc_subscribe(ws, r, request_json['account'].replace("nano_", "xrb_"), currency)
+                            await r.app['rdata'].rpush(f"conntrack {str(float(time.time()))}:{uid}:connect:{address}")
+                            # Store FCM token if available, for push notifications
+                            if 'fcm_token' in request_json:
+                                pass
+                                #update_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token'])
+                            elif 'fcm_token_v2' in request_json and 'notification_enabled' in request_json:
+                                if request_json['notification_enabled']:
+                                    pass
+                                    #update_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token_v2'], v2=True)
+                                else:
+                                    pass
+                                    #delete_fcm_token_for_account(natriumcast_request['account'], natriumcast_request['fcm_token_v2'])
+                    except Exception as e:
+                        log.server_logger.error('subscribe error;%s;%s;%s', str(e), address, uid)
+                        reply = {'error': 'subscribe error', 'detail': str(e)}
+                        if requestid is not None: reply['request_id'] = requestid
+                        return json.dumps(reply)
     except Exception:
         pass
 
@@ -167,8 +291,7 @@ async def websocket_handler(r):
     # Connection Opened
     ws.id = str(uuid.uuid4())
     r.app['clients'][ws.id] = ws
-    log.server_logger.info('new connection ')
-    log.server_logger.info('new connection;' + get_request_ip(r) + ';' + ws.id + ';User-Agent:' + str(
+    log.server_logger.info('new connection;%s;%s;User-Agent:%s', get_request_ip(r), ws.id, str(
         r.headers.get('User-Agent')))
 
     try:
@@ -177,7 +300,9 @@ async def websocket_handler(r):
                 if msg.data == 'close':
                     await ws.close()
                 else:
-                    await handle_user_message(ws, r, msg)
+                    reply = await handle_user_message(r, msg, ws=ws)
+                    if reply is not None:
+                        await ws.send_str(reply)
             elif msg.type == WSMsgType.CLOSE:
                 log.server_logger.info('WS Connection closed normally')
                 break
@@ -221,6 +346,7 @@ async def init_app():
         app['last_msg'] = {} # Last time a client has sent a message
         app['active_messages'] = set() # Avoid duplicate messages from being processes simultaneously
         app['cur_prefs'] = {} # Client currency preferences
+        app['subscriptions'] = {} # Store subscription UUIDs, this is used for targeting callback accounts
 
     # Setup logger
     if debug_mode > 0:
@@ -252,7 +378,6 @@ def main():
 
     # Start web/ws server
     async def start():
-        global runner, site
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, '127.0.0.1', app_port)
