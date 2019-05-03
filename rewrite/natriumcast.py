@@ -12,6 +12,7 @@ from logging.handlers import WatchedFileHandler, TimedRotatingFileHandler
 
 from aioredis import create_redis
 from aiohttp import ClientSession, log, web, WSMsgType
+from bitstring import BitArray
 
 # Configuration arguments
 
@@ -71,6 +72,9 @@ async def json_post(request_json, timeout=30):
     try:
         async with ClientSession() as session:
             async with session.post(rpc_url, json=request_json, timeout=timeout) as resp:
+                if resp.status > 299:
+                    log.server_logger.error('Received status code %d from request %s', resp.status, json.dumps(request_json))
+                    raise Exception
                 return await resp.json(content_type=None)
     except Exception:
         log.server_logger.exception()
@@ -90,6 +94,48 @@ async def get_pending_count(r, account, uid = 0):
         return 0
     log.server_logger.debug('received response for pending %s', json.dumps(response))        
     return len(response['blocks'])
+
+def address_decode(address):
+    """Given a string containing an XRB/NANO/BAN address, confirm validity and provide resulting hex address"""
+    if (address[:4] == 'xrb_' or address[:5] == 'nano_' and not banano_mode) or (address[:4] == 'ban_' and banano_mode):
+        account_map = "13456789abcdefghijkmnopqrstuwxyz"  # each index = binary value, account_lookup[0] == '1'
+        account_lookup = {}
+        for i in range(0, 32):  # populate lookup index with prebuilt bitarrays ready to append
+            account_lookup[account_map[i]] = BitArray(uint=i, length=5)
+        data = address.split('_')[1]
+        acrop_key = data[:-8]  # we want everything after 'xrb_' or 'nano_' but before the 8-char checksum
+        acrop_check = data[-8:]  # extract checksum
+
+        # convert base-32 (5-bit) values to byte string by appending each 5-bit value to the bitstring,
+        # essentially bitshifting << 5 and then adding the 5-bit value.
+        number_l = BitArray()
+        for x in range(0, len(acrop_key)):
+            number_l.append(account_lookup[acrop_key[x]])
+
+        number_l = number_l[4:]  # reduce from 260 to 256 bit (upper 4 bits are never used as account is a uint256)
+        check_l = BitArray()
+
+        for x in range(0, len(acrop_check)):
+            check_l.append(account_lookup[acrop_check[x]])
+        check_l.byteswap()  # reverse byte order to match hashing format
+        result = number_l.hex.upper()
+        return result
+
+    return False
+
+def pubkey(address):
+    """Account to public key"""
+    account_map = "13456789abcdefghijkmnopqrstuwxyz"
+    account_lookup = {}
+    for i in range(0,32): #make a lookup table
+        account_lookup[account_map[i]] = BitArray(uint=i,length=5)
+    acrop_key = address[-60:-8] #leave out prefix and checksum
+    number_l = BitArray()                                    
+    for x in range(0, len(acrop_key)):    
+        number_l.append(account_lookup[acrop_key[x]])        
+    number_l = number_l[4:] # reduce from 260 to 256 bit
+    result = number_l.hex.upper()
+    return result
 
 # Push notifications
 
@@ -179,7 +225,7 @@ async def rpc_reconnect(ws, r, account):
     log.server_logger.info('sending account_info %s', account)
     response = await json_post(rpc)
 
-    if response is None or 'frontier' not in response:
+    if response is None:
         log.server_logger.error('reconnect error; %s ; %s', get_request_ip(r), ws.id)
         ws.send_str('{"error":"reconnect error"}')
     else:
@@ -217,7 +263,7 @@ async def rpc_subscribe(ws, r, account, currency):
     log.server_logger.info('sending account_info;%s;%s', get_request_ip, ws.id)
     response = await json_post(rpc)
 
-    if response is None or 'frontier' not in response:
+    if response is None:
         log.server_logger.error('reconnect error; %s ; %s', get_request_ip(r), ws.id)
         ws.send_str('{"error":"subscribe error"}')
     else:
@@ -245,6 +291,170 @@ async def rpc_subscribe(ws, r, account, currency):
 
         ws.send_str(response)
 
+async def rpc_accountcheck(r, uid, account):
+    """See if account is open or not, return 'ready':True if it is open"""
+    log.server_logger.info('rpc_accountcheck;%s;%s', get_request_ip(r), uid)
+    rpc = {
+        'action':'account_info',
+        'account':account
+    }
+    log.server_logger.debug('sending request;%s;%s;%s', json.dumps(rpc), get_request_ip(r), uid)
+    response = await json_post(rpc)
+    if response is None:
+        log.server_logger.error('account check error;%s;%s', get_request_ip(r), uid)
+        return json.dumps({
+            'error': 'account_check error'
+        })
+    else:
+        info = {'ready': True}
+        try:
+            if response['error'] == "Account not found":
+                info = {'ready': False}
+        except Exception:
+            pass
+        return json.dumps(info)
+
+async def work_request(http_client, request_json):
+    """Send work_generate with use_peers injected"""
+    if 'use_peers' not in request_json:
+        request['use_peers'] = True
+    return await json_post(request_json)
+
+async def work_defer(r, uid, request_json):
+    """Request work_generate, but avoid duplicate requests"""
+    if request_json['hash'] in r.app['active_work']:
+        log.server_logger.error('work already requested;%s;%s', get_request_ip(r), uid)
+        return None
+    else:
+        r.app['active_work'].add(request_json['hash'])
+    try:
+        log.server_logger.info('Requesting work for %s;%s', get_request_ip(r), uid)
+        response = await work_request(request_json)
+        if response is None:
+            log.server_logger.error('work defer error; %s;%s', get_request_ip(r), uid)
+            return json.dumps({
+                'error':'work defer error'
+            })
+        r.app['actove_work'].remove(request_json['hash'])
+        return json.dumps(response)
+    except Exception:
+        log.server_logger.exception()
+        r.app['active_work'].remove(request_json['hash'])
+
+# Server-side check for any incidental mixups due to race conditions or misunderstanding protocol.
+# Check blocks submitted for processing to ensure the user or client has not accidentally created a send to an unknown
+# address due to balance miscalculation leading to the state block being interpreted as a send rather than a receive.
+async def process_defer(r, uid, block, do_work):
+    # Let's cache the link because, due to callback delay it's possible a client can receive
+    # a push notification for a block it already knows about
+    if 'link' in block:
+        await r.app['rdata'].set(f"link_{block['link']}", "1", expire=3600)
+
+    # check for receive race condition
+    # if block['type'] == 'state' and block['previous'] and block['balance'] and block['link']:
+    if block['type'] == 'state' and {'previous', 'balance', 'link'} <= set(block):
+        try:
+            prev_response = await json_post({
+                'action': 'blocks_info',
+                'hashes': [block['previous']],
+                'balance': 'true'
+            })
+
+            try:
+                prev_block = json.loads(prev_response['blocks'][block['previous']]['contents'])
+
+                if prev_block['type'] != 'state' and ('balance' in prev_block):
+                    prev_balance = int(prev_block['balance'], 16)
+                elif prev_block['type'] != 'state' and ('balance' not in prev_block):
+                    prev_balance = int(prev_response['blocks'][block['previous']]['balance'])
+                else:
+                    prev_balance = int(prev_block['balance'])
+
+                if int(block['balance']) < prev_balance:
+                    link_hash = block['link']
+                    link_hash = address_decode(link_hash)
+                    # this is a send
+                    link_response = await json_post({
+                        'action': 'block',
+                        'hash': link_hash
+                    })
+                    # print('link_response',link_response)
+                    if 'error' not in link_response and 'contents' in link_response:
+                        log.server_logger.error(
+                            'rpc process receive race condition detected;%s;%s;%s',
+                            get_request_ip(r), uid, str(r.headers.get('User-Agent')))
+                        return json.dumps({
+                            'error':'receive race condition detected'
+                        })
+            except Exception:
+                # no contents, means an error was returned for previous block. no action needed
+                log.server_logger.exception('in process_defer')
+                pass
+        except Exception:
+            log.server_logger.error('rpc process receive race condition exception;%s;%s;%s;User-Agent:%s',
+            str(sys.exc_info()), get_request_ip(r), uid, str(r.headers.get('User-Agent')))
+            pass
+
+    # Do work if we're told to
+    if 'work' not in block and do_work:
+        try:
+            if block['previous'] == '0' or block['previous'] == '0000000000000000000000000000000000000000000000000000000000000000':
+                workbase = pubkey(block['account'])
+            else:
+                workbase = block['previous']
+            work_response = await work_request({
+                'action': 'work_generate',
+                'hash': workbase
+            })
+            if work_response is None or 'work' not in work_response:
+                return json.dumps({
+                    'error':'failed work_generate in process request'
+                })
+            block['work'] = work_response['work']
+        except Exception:
+            log.server_logger.exception('in work process_defer')
+            return json.dumps({
+                'error':"Failed work_generate in process request"
+            })
+
+    return await json_post({
+        'action': 'process',
+        'block': json.dumps(block)
+    })
+
+# Since someone might get cute and attempt to spam users with low-value transactions in an effort to deny them the
+# ability to receive, we will take the performance hit for them and pull all pending block data. Then we will sort by
+# most valuable to least valuable. Finally, to save the client processing burden and give the server room to breathe,
+# we return only the top 10.
+async def pending_defer(r, uid, request):
+    response = await json_post(request)
+
+    if response is None:
+        log.server_logger.error('pending defer request failure;%s;%s', get_request_ip(r, uid))
+        return json.dumps({
+            'error':'rpc pending error'
+        })
+    else:
+        # sort dict keys by amount value within, descending
+        newlist = sorted(response['blocks'], key=lambda x: (int(response['blocks'][x]['amount'])), reverse=True)
+        # only provide the first 10
+        newlist = newlist[:10]
+        # build a new json structure
+        if len(newlist) > 0:
+            newdict = {"blocks": {}}
+            for x in newlist:
+                newdict['blocks'][x] = response['blocks'][x]
+        else:
+            # returning {} as the value for blocks causes issues with clients, RPC provides "", lets do the same.
+            newdict = {
+                "blocks": ""}
+
+        reply = json.dumps(newdict)
+        logging.info('pending defer response sent;%s;%s', get_request_ip(r), uid)
+
+    # return to client
+    return reply
+
 # Primary handler for all websocket connections
 async def handle_user_message(r, msg, ws=None):
     """Process data sent by client"""
@@ -257,14 +467,15 @@ async def handle_user_message(r, msg, ws=None):
             log.server_logger.error('client messaging too quickly: %s ms; %s; %s; User-Agent: %s', str(
                 now - r.app['last_msg'][address]), address, uid, str(
                 r.headers.get('User-Agent')))
-            return
+            return None
     r.app['last_msg'][address] = now
     log.server_logger.info('request; %s, %s, %s', message, address, uid)
     if message not in r.app['active_messages']:
         r.app['active_messages'].add(message)
     else:
         log.server_logger.error('request already active; %s; %s; %s', message, address, uid)
-        return
+        return None
+    ret = None
     try:
         request_json = json.loads(message)
         if request_json['action'] in allowed_rpc_actions:
@@ -350,7 +561,7 @@ async def handle_user_message(r, msg, ws=None):
                         log.server_logger.error('reconnect error; %s; %s; %s', str(e), address, uid)
                         reply = {'error': 'reconnect error', 'detail': str(e)}
                         if requestid is not None: reply['request_id'] = requestid
-                        return json.dumps(reply)
+                        ret = json.dumps(reply)
                 # new user, setup uuid(or use existing if available) and account info
                 else:
                     log.server_logger.info('subscribe request; %s; %s', get_request_ip(r), uid)
@@ -373,7 +584,7 @@ async def handle_user_message(r, msg, ws=None):
                         log.server_logger.error('subscribe error;%s;%s;%s', str(e), address, uid)
                         reply = {'error': 'subscribe error', 'detail': str(e)}
                         if requestid is not None: reply['request_id'] = requestid
-                        return json.dumps(reply)
+                        ret = json.dumps(reply)
             elif request_json['action'] == "fcm_update":
                 # Updating FCM token
                 if 'fcm_token_v2' in request_json and 'account' in request_json and 'enabled' in request_json:
@@ -381,8 +592,135 @@ async def handle_user_message(r, msg, ws=None):
                         await update_fcm_token_for_account(request_json['account'], request_json['fcm_token_v2'], r, v2=True)
                     else:
                         await delete_fcm_token_for_account(request_json['account'], request_json['fcm_token_v2'], r)
-    except Exception:
-        pass
+            # rpc: price_data
+            elif request_json['action'] == "price_data":
+                log.server_logger.info('price data request;%s;%s', get_request_ip(r), uid)
+                try:
+                    if request_json['currency'].upper() in currency_list:
+                        try:
+                            price = await r.app['rdata'].hget("prices",
+                                                "coingecko:nano-" + request_json['currency'].lower())
+                            reply = json.dumps({
+                                'currency': request_json['currency'].lower(),
+                                'price': str(price)
+                            })
+                            ret = reply
+                        except Exception:
+                            log.server_logger.error(
+                                'price data error, unable to get price;%s;%s', get_request_ip(r), uid)
+                            ret = json.dumps({
+                                'error':'price data error - unable to get price'
+                            })
+                    else:
+                        log.server_logger.error(
+                            'price data error, unknown currency;%s;%s', get_request_ip(r), uid)
+                        ret = json.dumps({
+                            'error':'unknown currency'
+                        })
+                except Exception as e:
+                    log.server_logger.error('price data error;%s;%s;%s', str(e), get_request_ip(r), uid)
+                    ret = json.dumps({
+                        'error':'price data error',
+                        'details':str(e)
+                    })
+            # rpc: account_check
+            elif request_json['action'] == "account_check":
+                log.server_logger.info('account check request;%s;%s', get_request_ip(r), uid)
+                try:
+                    response = await rpc_accountcheck(r, uid, request_json['account'])
+                    ret = response
+                except Exception as e:
+                    log.server_logger.error('account check error;%s;%s;%s', str(e), get_request_ip(r), uid)
+                    ret = json.dumps({
+                        'error': 'account check error',
+                        'detail': str(e)
+                    })
+            # rpc: work_generate
+            elif request_json['action'] == "work_generate":
+                """
+                If we care about blocking work to specific client versions we can so here:
+                if r.headers.get('X-Client-Version') is None:
+                    xcver = 0
+                else:
+                    xcver = int(r.headers.get('X-Client-Version'))
+                """
+                try:
+                    reply = await work_defer(r, uid, request_json)
+                    ret = reply
+                except Exception as e:
+                    log.server_logger.error('work RPC error; %s;%s;%s;User-Agent:%s',
+                        str(e), get_request_ip(r), uid, r.headers.get('User-Agent'))
+                    ret = json.dumps({
+                        'error':'work RPC error',
+                        'detail':str(e)
+                    })
+            # rpc: process
+            elif request_json['action'] == "process":
+                try:
+                    do_work = False
+                    if 'do_work' in request_json and request_json['do_work'] == True:
+                        do_work = True
+                    reply = await process_defer(r, uid, json.loads(request_json['block']), do_work)
+                    if reply is None:
+                        raise Exception
+                    ret = json.dumps(reply)
+                except Exception as e:
+                    log.server_logger.error('process rpc error;%s;%s;%s;User-Agent:%s',
+                        str(e), get_request_ip(r), uid, str(r.headers.get('User-Agent')))
+                    ret = json.dumps({
+                        'error':'process rpc error',
+                        'detail':str(e)
+                    })
+            # rpc: pending
+            elif request_json['action'] == "pending":
+                try:
+                    reply = await pending_defer(r, uid, request_json)
+                    if reply is None:
+                        raise Exception
+                    ret = reply
+                except Exception as e:
+                    log.server_logger.error('pending rpc error;%s;%s;%s;User-Agent:%s', str(
+                        e), get_request_ip(r), uid, str(r.headers.get('User-Agent')))
+                    ret = json.dumps({
+                        'error':'pending rpc error',
+                        'detail':str(e)
+                    })
+            elif request_json['action'] == 'account_history':
+                if await r.app['rdata'].hget(uid, "account") is None:
+                    await r.app['rdata'].hset(uid, "account", json.dumps([request_json['account']]))
+                try:
+                    response = await json_post(request_json)
+                    if response is None:
+                        raise Exception
+                    ret = json.dumps(response)
+                except Exception as e:
+                    log.server_logger.error('rpc error;%s;%s;%s', str(e), get_request_ip(r), uid)
+                    ret = json.dumps({
+                        'error':'account_history rpc error',
+                        'detail': str(e)
+                    })
+            # rpc: fallthrough and error catch
+            else:
+                try:
+                    response = await json_post(request_json)
+                    if response is None:
+                        raise Exception
+                    ret = json.dumps(response)
+                except Exception as e:
+                    log.server_logger.error('rpc error;%s;%s;%s', str(e), get_request_ip(r), uid)
+                    ret = json.dumps({
+                        'error':'rpc error',
+                        'detail': str(e)
+                    })
+    except Exception as e:
+        log.server_logger.error('uncaught error;%s;%s;%s', str(e), get_request_ip(r), uid)
+        ret = json.dumps({
+            'error':'general error',
+            'detail':str(e)
+        })
+    finally:
+        r.app['active_messages'].remove(message)
+        return ret
 
 async def websocket_handler(r):
     """Handler for websocket connections and messages"""
@@ -404,6 +742,7 @@ async def websocket_handler(r):
                 else:
                     reply = await handle_user_message(r, msg, ws=ws)
                     if reply is not None:
+                        log.server_logger.debug('Sending response %s to %s', reply, get_request_ip(r))
                         await ws.send_str(reply)
             elif msg.type == WSMsgType.CLOSE:
                 log.server_logger.info('WS Connection closed normally')
@@ -449,6 +788,7 @@ async def init_app():
         app['active_messages'] = set() # Avoid duplicate messages from being processes simultaneously
         app['cur_prefs'] = {} # Client currency preferences
         app['subscriptions'] = {} # Store subscription UUIDs, this is used for targeting callback accounts
+        app['active_work'] = set() # Keep track of active work requests to prevent duplicates
 
     # Setup logger
     if debug_mode:
