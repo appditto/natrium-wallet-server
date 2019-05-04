@@ -140,7 +140,7 @@ async def get_fcm_tokens(account : str, r : web.Request, v2 : bool = False) -> l
         if account not in account_list:
             continue
         new_token_list['data'].append(t)
-    await redisInst.set(account, new_token_list)
+    await redisInst.set(account, json.dumps(new_token_list))
     return new_token_list['data']
 
 ### END Utility functions
@@ -533,7 +533,7 @@ async def callback(r : web.Request):
                 r.app['clients'][sub].send_str(json.dumps(request_json))
     except Exception:
         log.server_logger.exception("received exception in callback")
-        return web.HTTPInternalServerError(reason=f"Something went wrong {str(sys.exc_info()}")
+        return web.HTTPInternalServerError(reason=f"Something went wrong {str(sys.exc_info())}")
 
 async def send_prices(app):
     """Send price updates to connected clients once per minute"""
