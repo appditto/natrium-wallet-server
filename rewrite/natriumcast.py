@@ -178,17 +178,17 @@ async def handle_user_message(r : web.Request, msg : WSMessage, ws : web.WebSock
                         # If account isn't stored in list-format, modify it so it is
                         # If it already is, add this account to the list
                         try:
-                            account_list = json.loads(account.decode('utf-8'))
+                            account_list = json.loads(account)
                             if 'account' in request_json and request_json['account'].lower() not in account_list:
                                 account_list.append(request_json['account'].lower())
                                 await r.app['rdata'].hset(request_json['uuid'], "account", json.dumps(account_list))
                         except Exception as e:
-                            if 'account' in request_json and request_json['account'].lower() != account.decode('utf-8').lower():
+                            if 'account' in request_json and request_json['account'].lower() != account.lower():
                                 resubscribe = False
                             else:
                                 # Perform upgrade to list style
                                 account_list = []
-                                account_list.append(account.decode('utf-8').lower())
+                                account_list.append(account.lower())
                                 await r.app['rdata'].hset(request_json['uuid'], "account", json.dumps(account_list))
                 # already subscribed, reconnect (websocket connections)
                 if 'uuid' in request_json and resubscribe:
@@ -210,7 +210,7 @@ async def handle_user_message(r : web.Request, msg : WSMessage, ws : web.WebSock
                                 await r.app['rdata'].hset(uid, "currency", 'usd')
 
                         # Get relevant account
-                        account_list = json.loads(await r.app['rdata'].hget(uid, "account").decode('utf-8'))
+                        account_list = json.loads(await r.app['rdata'].hget(uid, "account"))
                         if 'account' in request_json:
                             account = request_json['account']
                         else:
