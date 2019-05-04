@@ -1,10 +1,12 @@
 from aiohttp import web
 from bitstring import BitArray
 
+
 class Util:
 
     def __init__(self, banano_mode : bool):
         self.banano_mode = banano_mode
+        self.raw_per_nano = 10**29 if banano_mode else 10**30
 
     def get_request_ip(self, r : web.Request) -> str:
         host = r.headers.get('X-FORWARDED-FOR',None)
@@ -55,3 +57,26 @@ class Util:
         number_l = number_l[4:] # reduce from 260 to 256 bit
         result = number_l.hex.upper()
         return result
+
+    def minimalNumber(self, x):
+        if type(x) is str:
+            if x == '':
+                x = 0
+        f = float(x)
+        if f.is_integer():
+            return int(f)
+        else:
+            return round(f, 2 if self.banano_mode else 6)
+
+    def raw_to_nano(self, raw_amt : int):
+        nano_amt = raw_amt / self.raw_per_nano
+        # Format to have optional decimals
+        return self.minimalNumber(nano_amt)
+
+    def nano_to_raw(self, nano_amt):
+        if not self.banano_mode:
+            expanded = float(nano_amt) * 1000000
+            return int(expanded) * (10 ** 24)
+        else:
+            expanded = float(nano_amt) * 100
+            return int(expanded) * (10 ** 27)
