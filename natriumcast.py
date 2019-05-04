@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+from dotenv import load_dotenv
+load_dotenv()
+
 import argparse
 import asyncio
 import ipaddress
@@ -54,7 +57,7 @@ except Exception:
 rpc_url = os.getenv('RPC_URL', 'http://[::1]:7076')
 fcm_api_key = os.getenv('FCM_API_KEY', None)
 fcm_sender_id = os.getenv('FCM_SENDER_ID', None)
-debug_mode = True if os.getenv('DEBUG', 1) != 0 else False
+debug_mode = True if int(os.getenv('DEBUG', 1)) != 0 else False
 
 # Objects
 
@@ -148,17 +151,22 @@ async def handle_user_message(r : web.Request, msg : WSMessage, ws : web.WebSock
     address = util.get_request_ip(r)
     message = msg.data
     uid = ws.id if ws is not None else 0
-    """
-    TODO - this isn't really working well, need to make it up to 3 times per 5ms or something like that
     now = int(round(time.time() * 1000))
     if address in r.app['last_msg']:
-        if (now - r.app['last_msg'][address]) < 10:
-            log.server_logger.error('client messaging too quickly: %s ms; %s; %s; User-Agent: %s', str(
-                now - r.app['last_msg'][address]), address, uid, str(
-                r.headers.get('User-Agent')))
-            return None
-    r.app['last_msg'][address] = now
-    """
+        if (now - r.app['last_msg'][address]['last']) < 25:
+            if r.app['last_msg'][address]['count'] > 3:
+                log.server_logger.error('client messaging too quickly: %s ms; %s; %s; User-Agent: %s', str(
+                    now - r.app['last_msg'][address]['last']), address, uid, str(
+                    r.headers.get('User-Agent')))
+                return None
+            else:
+                r.app['last_msg'][address]['count'] += 1
+        else:
+            r.app['last_msg'][address]['count'] = 0
+    else:
+        r.app['last_msg'][address] = {}
+        r.app['last_msg'][address]['count'] = 0
+    r.app['last_msg'][address]['last'] = now
     log.server_logger.info('request; %s, %s, %s', message, address, uid)
     if message not in r.app['active_messages']:
         r.app['active_messages'].add(message)
@@ -574,7 +582,7 @@ async def init_app():
     if debug_mode:
         logging.basicConfig(level='DEBUG')
     else:
-        root = log.server_logger.getLogger()
+        root = log.server_logger
         logging.basicConfig(level='INFO')
         handler = WatchedFileHandler(log_file)
         formatter = logging.Formatter("%(asctime)s;%(levelname)s;%(message)s", "%Y-%m-%d %H:%M:%S %z")
