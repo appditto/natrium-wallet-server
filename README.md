@@ -1,137 +1,63 @@
-# natrium-wallet-server (NANO)
+# Natrium (NANO) and Kalium (BANANO) Wallet Server
 
-**Requires Python 3.6**
+## Requirements
+
+**Requires Python 3.6 or Newer**
 
 Install requirements on Ubuntu 18.04:
 ```
-apt install python3 python3-dev libdpkg-perl virtualenv
+apt install python3 python3-dev libdpkg-perl virtualenv nginx
 ```
 
-Minimum of one **NANO Node** with RPC enabled.
-Once installed as a service, make sure the systemd service file has the following entry:
-```
-[Service]
-LimitNOFILE=65536
-```
-This will help prevent your system from running out of file handles due to may connections.
+Minimum of one **NANO/BANANO Node** with RPC enabled.
 
 **Redis server** running on the default port 6379
 
 On debian-based systems
+
 ```
 sudo apt install redis-server
 ```
 
-## Let's Encrypt
-Setup SSL with let's encrypt and cert bot.
-
-On ubuntu:
-
-```
-sudo add-apt-repository ppa:certbot/certbot
-sudo apt update
-sudo apt install certbot
-sudo certbot certonly --standalone --preferred-challenges http -d <domain>
-```
-
-## Firebase (FCM)
-
-For push notifications, get your legacy FCM api key from the firebase console.
-
-## PoW
-
-Jaycox's distributed POW system is supported, you need to specify the URL:PORT and KEY in the environment variables as described below.
-
-Otherwise, the server will use the work_peers set on your node.
-
 ## Installation
-```git clone https://github.com/BananoCoin/natrium-wallet-server.git natriumcast```
 
-Ensure python3.6 is installed and
+First add a user to run the application
+
+```
+sudo adduser natriumuser
+sudo usermod -aG sudo natriumuser
+sudo usermod -aG www-data natriumuser
+```
+
+```git clone https://github.com/appditto/natrium-wallet-server.git natriumcast```
+
+Ensure python3.6 or newer is installed (`python3 --version`) and
+
 ```
 cd natriumcast
-virtualenv -p python3.6 venv
+virtualenv -p python3 venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
 You must configure using environment variables. You may do this manually, as part of a launching script, in your bash settings, or within a systemd service.
-```
-export NANO_RPC_URL=http://<host>:<rpcport>
-export NANO_CALLBACK_PORT=17076
-export NANO_SOCKET_PORT=443
-export NANO_CERT_DIR=/etc/letsencrypt/live/<domain>
-export NANO_KEY_FILE=privkey.pem
-export NANO_CRT_FILE=fullchain.pem
-export NANO_LOG_FILE=/home/<username>/natriumcast.log
-export NANO_LOG_LEVEL=INFO
-export FCM_API_KEY=<firebase_api_key>
-export FCM_SENDER_ID<firebase sender id>
-export NANO_DPOW_URL=http://<host>:<port> (optional)
-export NANO_DPOW_KEY=<key> (optional)
-```
-### Configure node for RPC
-Ensure rpc is enabled as well as control (security over internal wallet is provided in whitelisted commands)
 
-~/RaiBlocks/config.json:
+Create the file `.env` in the same directory as `natriumcast.py` with the contents:
+
 ```
-    "rpc_enable": "true",
-    "rpc": {
-        "address": "::1",
-        "port": "7076",
-        "enable_control": "true",
+RPC_URL=http://[::1]:7076 # NANO/BANANO node RPC URL
+DEBUG=0                   # Debug mode (0 is off)
+FCM_API_KEY=None          # (Optional) Firebase Legacy API KEY (From Firebase Console)
+FCM_SENDER_ID=1234        # (Optional) Firebase Sender ID (From Firebase Console)
 ```
 
+## Running
 
-### Configure node callback for new block publication
-Set config.json for your node
+The recommended configuration is to run the server behind [nginx](https://www.nginx.com/), which will act as a reverse proxy
 
-~/RaiBlocks/config.json:
-```
-        "callback_address": "127.0.0.1",
-        "callback_port": "17076",
-        "callback_target": "\/",
-```
+Next, we'll define a systemd service unit
 
-## Setup cron job for price retrieval
-
-Run ```crontab -e``` and add the following:
-```
-*/5 * * * * /home/<username>/natriumcast/venv/bin/python /home/<username>/natriumcast/prices.py >/dev/null 2>&1
-```
-
-## systemd service file
-Remember to change ```NANO_RPC_URL``` port if using haproxy.
-
-/etc/systemd/system/natriumcast.service
-```
-[Unit]
-Description=natriumcast
-After=network.target
-After=systemd-user-sessions.service
-After=network-online.target
-
-[Service]
-Environment=NANO_RPC_URL=http://<host>:<rpcport>
-Environment=NANO_CALLBACK_PORT=17076
-Environment=NANO_SOCKET_PORT=443
-Environment=NANO_CERT_DIR=/etc/letsencrypt/live/<domain>
-Environment=NANO_KEY_FILE=privkey.pem
-Environment=NANO_CRT_FILE=fullchain.pem
-Environment=NANO_LOG_FILE=/home/user/natriumcast.log
-Environment=NANO_LOG_LEVEL=INFO
-Environment=FCM_API_KEY=<firebase_api_key>
-Environment=FCM_SENDER_ID=<firebase sender id>
-Environment=NANO_DPOW_URL=http://<host>:<port> (optional)
-Environment=NANO_DPOW_KEY=<key> (optional)
-LimitNOFILE=65536
-ExecStart=/usr/local/bin/python3.6 /home/user/natriumcast/natriumcast.py
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-Enable by running ```sudo systemctl enable natriumcast.service``` run using ```sudo systemctl start natriumcast.service```
+# Documentation Coming Soon*
 
 ## [optional] haproxy node load balancing
 Multiple nodes may run on the same server as long as you change the RPC binding port for each. Same for the peering port.
