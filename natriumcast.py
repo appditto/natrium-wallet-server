@@ -531,6 +531,7 @@ async def callback(r : web.Request):
             log.server_logger.info("Pushing to client %s", str(r.app['subscriptions'][request_json['account']]))
             for sub in r.app['subscriptions'][request_json['account']]:
                 r.app['clients'][sub].send_str(json.dumps(request_json))
+        return web.HTTPOk()
     except Exception:
         log.server_logger.exception("received exception in callback")
         return web.HTTPInternalServerError(reason=f"Something went wrong {str(sys.exc_info())}")
@@ -542,21 +543,24 @@ async def send_prices(app):
         # active_work = set()
         # empty out this set periodically, to ensure clients dont somehow get stuck when an error causes their
         # work not to return
-        if len(app['clients']):
-            log.server_logger.info('pushing price data to %d connections', len(app['clients']))
-            btc = float(await app['rdata'].hget("prices", "coingecko:nano-btc"))
-            for client in app['clients']:
-                try:
+        try:
+            if len(app['clients']):
+                log.server_logger.info('pushing price data to %d connections', len(app['clients']))
+                btc = float(await app['rdata'].hget("prices", "coingecko:nano-btc"))
+                for client in app['clients']:
                     try:
-                        currency = app['cur_prefs'][client]
-                    except Exception:
-                        currency = 'usd'
-                    price = float(await app['rdata'].hget("prices", "coingecko:nano-" + currency.lower()))
+                        try:
+                            currency = app['cur_prefs'][client]
+                        except Exception:
+                            currency = 'usd'
+                        price = float(await app['rdata'].hget("prices", "coingecko:nano-" + currency.lower()))
 
-                    app['clients'].send_str(
-                        '{"currency":"' + currency.lower() + '","price":' + str(price) + ',"btc":' + str(btc) + '}')
-                except Exception:
-                    log.server_logger.exception('error pushing prices for client %s', client)
+                        app['clients'].send_str(
+                            '{"currency":"' + currency.lower() + '","price":' + str(price) + ',"btc":' + str(btc) + '}')
+                    except Exception:
+                        log.server_logger.exception('error pushing prices for client %s', client)
+        except Exception:
+            log.server_logger.exception("exception pushing price data")
         await asyncio.sleep(60)
 
 async def init_app():
