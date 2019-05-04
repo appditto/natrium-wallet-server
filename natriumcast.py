@@ -412,10 +412,10 @@ async def handle_user_message(r : web.Request, msg : WSMessage, ws : web.WebSock
                         'detail': str(e)
                     })
     except Exception as e:
-        log.server_logger.error('uncaught error;%s;%s;%s', sys.exc_info(), util.get_request_ip(r), uid)
+        log.server_logger.exception('uncaught error;%s;%s', util.get_request_ip(r), uid)
         ret = json.dumps({
             'error':'general error',
-            'detail':sys.exc_info()
+            'detail':str(sys.exc_info())
         })
     finally:
         r.app['active_messages'].remove(message)
@@ -580,10 +580,10 @@ async def init_app():
 
     # Setup logger
     if debug_mode:
-        logging.basicConfig(level='DEBUG')
+        logging.basicConfig(level=logging.DEBUG)
     else:
-        root = log.server_logger
-        logging.basicConfig(level='INFO')
+        root = logging.getLogger('aiohttp.server')
+        logging.basicConfig(level=logging.INFO)
         handler = WatchedFileHandler(log_file)
         formatter = logging.Formatter("%(asctime)s;%(levelname)s;%(message)s", "%Y-%m-%d %H:%M:%S %z")
         handler.setFormatter(formatter)
