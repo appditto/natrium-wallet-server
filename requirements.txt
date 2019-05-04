@@ -6,3 +6,4 @@ bitstring
 aiofcm
 python-dotenv
 pylint
+uvloop

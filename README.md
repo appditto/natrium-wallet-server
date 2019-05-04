@@ -21,15 +21,20 @@ sudo apt install redis-server
 
 ## Installation
 
-First add a user to run the application
+Generally:
+
+1) Run the app under a dedicated user
+2) Clone the repository
+3) Configuration
+4) Run
 
 ```
-sudo adduser natriumuser
-sudo usermod -aG sudo natriumuser
-sudo usermod -aG www-data natriumuser
+sudo adduser natriumuser # Add natriumuser
+sudo usermod -aG sudo natriumuser # Add natriumuser to sudo group
+sudo usermod -aG www-data natriumuser # Add natriumuser to www-data group
+sudo su - natriumuser # Change to natriumuser
+git clone https://github.com/appditto/natrium-wallet-server.git natriumcast # Clone repository
 ```
-
-```git clone https://github.com/appditto/natrium-wallet-server.git natriumcast```
 
 Ensure python3.6 or newer is installed (`python3 --version`) and
 
@@ -57,7 +62,78 @@ The recommended configuration is to run the server behind [nginx](https://www.ng
 
 Next, we'll define a systemd service unit
 
-# Documentation Coming Soon*
+/etc/systemd/system/natriumcast@.service
+```
+[Unit]
+Description=Natrium Server
+After=network.target
+
+[Service]
+Type=simple
+User=natriumuser
+Group=www-data
+EnvironmentFile=/home/natriumuser/natriumcast/.env
+WorkingDirectory=/home/natriumuser/natriumcast
+ExecStart=./venv/bin/python natriumcast.py --host 127.0.0.1 --port %i
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable this service and start it, ensure all is working as expected
+
+```
+sudo systemctl enable natriumcast@5076
+sudo systemctl start natriumcast@5076
+sudo systemctl status natriumcast@5076
+```
+
+Next, configure nginx to proxy requests to this server
+
+/etc/nginx/sites-available/app.natrium.io
+
+```
+upstream natrium_nodes {
+        least_conn;
+
+        server http://natriumcast:5076;
+}
+
+server {
+        server_name app.natrium.io;
+
+        location / {
+                proxy_pass http://natrium_nodes;
+                proxy_redirect off;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-Host $server_name;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+        }
+}
+
+```
+
+Enable this configuration and restart nginx
+
+```
+sudo ln -s /etc/nginx/sites-available/app.natrium.io /etc/nginx/sites-enabled/app.natrium.io
+sudo service nginx restart
+```
+
+## Let's encrypt
+
+```
+sudo add-apt-repository ppa:certbot/certbot
+sudo apt update
+sudo apt install python-certbot-nginx 
+sudo certbot --nginx
+```
 
 ## [optional] haproxy node load balancing
 Multiple nodes may run on the same server as long as you change the RPC binding port for each. Same for the peering port.

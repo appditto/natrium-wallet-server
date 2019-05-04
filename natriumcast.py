@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import uuid
+import uvloop
 from logging.handlers import TimedRotatingFileHandler, WatchedFileHandler
 
 import aiofcm
@@ -17,23 +18,33 @@ from aioredis import create_redis
 from rpc import RPC, allowed_rpc_actions
 from util import Util
 
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
 # Configuration arguments
 
 parser = argparse.ArgumentParser(description="Natrium/Kalium Wallet Server")
 parser.add_argument('-b', '--banano', action='store_true', help='Run for BANANO (Kalium-mode)', default=False)
-parser.add_argument('-l', '--host', type=str, help='Host to listen on (e.g. 127.0.0.1)', default='127.0.0.1')
+parser.add_argument('--host', type=str, help='Host to listen on (e.g. 127.0.0.1)', default='127.0.0.1')
+parser.add_argument('--path', type=str, help='(Optional) Path to run application on (for unix socket, e.g. /tmp/natriumapp.sock', default=None)
 parser.add_argument('-p', '--port', type=int, help='Port to listen on', default=5076)
+parser.add_argument('--log-file', type=str, help='Log file location', default='natriumcast.log')
 options = parser.parse_args()
 
 try:
     listen_host = str(ipaddress.ip_address(options.host))
     listen_port = int(options.port)
+    log_file = options.log_file
+    app_path = options.path
+    if app_path is None:
+        server_desc = f'on {listen_host} port {listen_port}'
+    else:
+        server_desc = f'on {app_path}'
     if options.banano:
         banano_mode = True
-        print(f'Starting KALIUM Server (BANANO) on {listen_host} port {listen_port}')
+        print(f'Starting KALIUM Server (BANANO) {server_desc}')
     else:
         banano_mode = False
-        print(f'Starting NATRIUM Server (NANO) on {listen_host} port {listen_port}')
+        print(f'Starting NATRIUM Server (NANO) {server_desc}')
 except Exception:
     parser.print_help()
     sys.exit(0)
@@ -509,10 +520,28 @@ async def callback(r : web.Request):
         for sub in r.app['subscriptions'][request_json['account']]:
             r.app['clients'][sub].send_str(json.dumps(request_json))
 
-async def send_prices():
+async def send_prices(app):
     """Send price updates to connected clients once per minute"""
     while True:
-        pass
+        # global active_work
+        # active_work = set()
+        # empty out this set periodically, to ensure clients dont somehow get stuck when an error causes their
+        # work not to return
+        if len(app['clients']):
+            log.server_logger.info('pushing price data to %d connections', len(app['clients']))
+            btc = float(await app['rdata'].hget("prices", "coingecko:nano-btc"))
+            for client in app['clients']:
+                try:
+                    try:
+                        currency = app['cur_prefs'][client]
+                    except Exception:
+                        currency = 'usd'
+                    price = float(await app['rdata'].hget("prices", "coingecko:nano-" + currency.lower()))
+
+                    app['clients'].send_str(
+                        '{"currency":"' + currency.lower() + '","price":' + str(price) + ',"btc":' + str(btc) + '}')
+                except Exception:
+                    log.server_logger.exception('error pushing prices for client %s', client)
         await asyncio.sleep(60)
 
 async def init_app():
@@ -544,11 +573,11 @@ async def init_app():
     else:
         root = log.server_logger.getLogger()
         logging.basicConfig(level='INFO')
-        handler = WatchedFileHandler(os.environ.get("NANO_LOG_FILE", "natriumcast.log"))
+        handler = WatchedFileHandler(log_file)
         formatter = logging.Formatter("%(asctime)s;%(levelname)s;%(message)s", "%Y-%m-%d %H:%M:%S %z")
         handler.setFormatter(formatter)
         root.addHandler(handler)
-        root.addHandler(TimedRotatingFileHandler(os.environ.get("NANO_LOG_FILE", "natriumcast.log"), when="d", interval=1, backupCount=100))        
+        root.addHandler(TimedRotatingFileHandler(log_file, when="d", interval=1, backupCount=100))        
 
     app = web.Application()
     app.add_routes([web.get('/', websocket_handler)]) # All WS requests
@@ -565,13 +594,16 @@ def main():
     """Main application loop"""
 
     # Periodic price job
-    price_task = loop.create_task(send_prices())
+    price_task = loop.create_task(send_prices(app))
 
     # Start web/ws server
     async def start():
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, listen_host, listen_port)
+        if app_path is not None:
+            site = web.UnixSite(runner, app_path)
+        else:
+            site = web.TCPSite(runner, listen_host, listen_port)
         await site.start()
 
     async def end():
