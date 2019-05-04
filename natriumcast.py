@@ -475,22 +475,22 @@ async def callback(r : web.Request):
                     r.app['clients'][sub].send_str(json.dumps(request_json))
             # Push FCM notification if this is a send
             if fcm_api_key is None:
-                return
+                return web.HTTPOk()
             fcm_tokens = set(await get_fcm_tokens(link, r))
             fcm_tokens_v2 = set(await get_fcm_tokens(link, r, v2=True))
             if (fcm_tokens is None or len(fcm_tokens) == 0) and (fcm_tokens_v2 is None or len(fcm_tokens_v2) == 0):
-                return
+                return web.HTTPOk()
             message = {
                 "action":"block",
                 "hash":request_json['block']['previous']
             }
             response = await rpc.json_post(message)
             if response is None:
-                return
+                return web.HTTPOk()
             # See if this block was already pocketed
             cached_hash = await r.app['rdata'].get(f"link_{hash}")
             if cached_hash is not None:
-                return
+                return web.HTTPOk()
             prev_data = response
             prev_data = prev_data['contents'] = json.loads(prev_data['contents'])
             prev_balance = int(prev_data['contents']['balance'])
