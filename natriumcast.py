@@ -148,6 +148,8 @@ async def handle_user_message(r : web.Request, msg : WSMessage, ws : web.WebSock
     address = util.get_request_ip(r)
     message = msg.data
     uid = ws.id if ws is not None else 0
+    """
+    TODO - this isn't really working well, need to make it up to 3 times per 5ms or something like that
     now = int(round(time.time() * 1000))
     if address in r.app['last_msg']:
         if (now - r.app['last_msg'][address]) < 10:
@@ -156,6 +158,7 @@ async def handle_user_message(r : web.Request, msg : WSMessage, ws : web.WebSock
                 r.headers.get('User-Agent')))
             return None
     r.app['last_msg'][address] = now
+    """
     log.server_logger.info('request; %s, %s, %s', message, address, uid)
     if message not in r.app['active_messages']:
         r.app['active_messages'].add(message)
