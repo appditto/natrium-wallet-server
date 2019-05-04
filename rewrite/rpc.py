@@ -53,7 +53,7 @@ class RPC:
 
         rpc = {
             "action":"account_info",
-            "account":"account",
+            "account":account,
             "pending":True,
             "representative": True
         }

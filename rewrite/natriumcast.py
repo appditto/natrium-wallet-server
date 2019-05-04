@@ -182,7 +182,7 @@ async def handle_user_message(r : web.Request, msg : WSMessage, ws : web.WebSock
                             if 'account' in request_json and request_json['account'].lower() not in account_list:
                                 account_list.append(request_json['account'].lower())
                                 await r.app['rdata'].hset(request_json['uuid'], "account", json.dumps(account_list))
-                        except Exception as e:
+                        except Exception:
                             if 'account' in request_json and request_json['account'].lower() != account.lower():
                                 resubscribe = False
                             else:
@@ -194,6 +194,7 @@ async def handle_user_message(r : web.Request, msg : WSMessage, ws : web.WebSock
                 if 'uuid' in request_json and resubscribe:
                     del r.app['clients'][uid]
                     uid = request_json['uuid']
+                    ws.id = uid
                     r.app['clients'][uid] = ws
                     log.server_logger.info('reconnection request;' + address + ';' + uid)
                     try:
@@ -388,10 +389,10 @@ async def handle_user_message(r : web.Request, msg : WSMessage, ws : web.WebSock
                         'detail': str(e)
                     })
     except Exception as e:
-        log.server_logger.error('uncaught error;%s;%s;%s', str(e), util.get_request_ip(r), uid)
+        log.server_logger.error('uncaught error;%s;%s;%s', sys.exc_info(), util.get_request_ip(r), uid)
         ret = json.dumps({
             'error':'general error',
-            'detail':str(e)
+            'detail':sys.exc_info()
         })
     finally:
         r.app['active_messages'].remove(message)
