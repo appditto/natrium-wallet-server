@@ -1,7 +1,8 @@
+redis
 requests
-certifi
 aioredis
 aiohttp 
 bitstring
 aiofcm
 python-dotenv
+pylint

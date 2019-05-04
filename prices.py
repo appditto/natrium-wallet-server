@@ -1,4 +1,4 @@
-import redis, urllib3, certifi, socket, json, time, os, sys, requests
+import redis, json, time, sys, requests
 
 #rblocks = redis.StrictRedis(host='localhost', port=6379, db=0)
 #rwork = redis.StrictRedis(host='localhost', port=6379, db=1)
