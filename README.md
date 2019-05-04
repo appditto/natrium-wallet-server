@@ -97,7 +97,7 @@ Next, configure nginx to proxy requests to this server
 upstream natrium_nodes {
         least_conn;
 
-        server http://natriumcast:5076;
+        server 127.0.0.1:5076;
 }
 
 server {
