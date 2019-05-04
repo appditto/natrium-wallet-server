@@ -8,10 +8,10 @@ import os
 import sys
 import time
 import uuid
-from logging.handlers import WatchedFileHandler, TimedRotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler, WatchedFileHandler
 
+from aiohttp import ClientSession, WSMessage, WSMsgType, log, web
 from aioredis import create_redis
-from aiohttp import ClientSession, log, web, WSMsgType, WSMessage
 
 from rpc import RPC, allowed_rpc_actions
 from util import Util
@@ -85,7 +85,7 @@ async def get_or_upgrade_token_account_list(account : str, token : str, r : web.
         try:
             curToken = json.loads(curTokenList)
             return curToken
-        except Exception as e:
+        except Exception:
             curToken = curTokenList
             await redisInst.set(token, json.dumps([curToken]), expire=2592000)
             if account != curToken:
@@ -518,5 +518,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
