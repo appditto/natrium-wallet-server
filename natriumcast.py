@@ -555,7 +555,7 @@ async def send_prices(app):
                             currency = 'usd'
                         price = float(await app['rdata'].hget("prices", "coingecko:nano-" + currency.lower()))
 
-                        app['clients'].send_str(
+                        await client.send_str(
                             '{"currency":"' + currency.lower() + '","price":' + str(price) + ',"btc":' + str(btc) + '}')
                     except Exception:
                         log.server_logger.exception('error pushing prices for client %s', client)
