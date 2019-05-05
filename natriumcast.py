@@ -269,16 +269,16 @@ async def handle_user_message(r : web.Request, msg : WSMessage, ws : web.WebSock
                             currency = request_json['currency']
                         else:
                             currency = 'usd'
-                            await rpc.rpc_subscribe(ws, r, request_json['account'].replace("nano_", "xrb_"), currency)
-                            await r.app['rdata'].rpush(f"conntrack {str(float(time.time()))}:{uid}:connect:{address}")
-                            # Store FCM token if available, for push notifications
-                            if 'fcm_token' in request_json:
-                                await update_fcm_token_for_account(request_json['account'], request_json['fcm_token'], r)
-                            elif 'fcm_token_v2' in request_json and 'notification_enabled' in request_json:
-                                if request_json['notification_enabled']:
-                                    await update_fcm_token_for_account(request_json['account'], request_json['fcm_token_v2'], r, v2=True)
-                                else:
-                                    await delete_fcm_token_for_account(request_json['account'], request_json['fcm_token_v2'], r)
+                        await rpc.rpc_subscribe(ws, r, request_json['account'].replace("nano_", "xrb_"), currency)
+                        await r.app['rdata'].rpush(f"conntrack {str(float(time.time()))}:{uid}:connect:{address}")
+                        # Store FCM token if available, for push notifications
+                        if 'fcm_token' in request_json:
+                            await update_fcm_token_for_account(request_json['account'], request_json['fcm_token'], r)
+                        elif 'fcm_token_v2' in request_json and 'notification_enabled' in request_json:
+                            if request_json['notification_enabled']:
+                                await update_fcm_token_for_account(request_json['account'], request_json['fcm_token_v2'], r, v2=True)
+                            else:
+                                await delete_fcm_token_for_account(request_json['account'], request_json['fcm_token_v2'], r)
                     except Exception as e:
                         log.server_logger.error('subscribe error;%s;%s;%s', str(e), address, uid)
                         reply = {'error': 'subscribe error', 'detail': str(e)}
