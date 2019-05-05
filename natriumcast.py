@@ -467,70 +467,65 @@ async def callback(r : web.Request):
         log.server_logger.debug(f"callback received {hash}")
         request_json['block'] = json.loads(request_json['block'])
 
-        if request_json['block']['type'] == 'state':
-            link = request_json['block']['link_as_account']
-            if r.app['subscriptions'].get(link):
-                log.server_logger.info("Pushing to clients %s", str(r.app['subscriptions'][link]))
-                for sub in r.app['subscriptions'][link]:
-                    r.app['clients'][sub].send_str(json.dumps(request_json))
-            # Push FCM notification if this is a send
-            if fcm_api_key is None:
-                return web.HTTPOk()
-            fcm_tokens = set(await get_fcm_tokens(link, r))
-            fcm_tokens_v2 = set(await get_fcm_tokens(link, r, v2=True))
-            if (fcm_tokens is None or len(fcm_tokens) == 0) and (fcm_tokens_v2 is None or len(fcm_tokens_v2) == 0):
-                return web.HTTPOk()
-            message = {
-                "action":"block",
-                "hash":request_json['block']['previous']
-            }
-            response = await rpc.json_post(message)
-            if response is None:
-                return web.HTTPOk()
-            # See if this block was already pocketed
-            cached_hash = await r.app['rdata'].get(f"link_{hash}")
-            if cached_hash is not None:
-                return web.HTTPOk()
-            prev_data = response
-            prev_data = prev_data['contents'] = json.loads(prev_data['contents'])
-            prev_balance = int(prev_data['contents']['balance'])
-            cur_balance = int(request_json['block']['balance'])
-            send_amount = prev_balance - cur_balance
-            if send_amount >= 1000000000000000000000000:
-                # This is a send, push notifications
-                fcm = aiofcm.FCM(fcm_sender_id, fcm_api_key)
-                # Send notification with generic title, send amount as body. App should have localizations and use this information at its discretion
-                for t in fcm_tokens:
-                    message = aiofcm.Message(
-                                device_token=t,
-                                data = {
-                                    "amount": str(send_amount)
-                                },
-                                priority=aiofcm.PRIORITY_HIGH
-                    )
-                    await fcm.send_message(message)
-                notification_title = f"Received {util.raw_to_nano(send_amount)} {'NANO' if not banano_mode else 'BANANO'}"
-                notification_body = f"Open {'Natrium' if not banano_mode else 'Kalium'} to view this transaction."
-                for t2 in fcm_tokens_v2:
-                    message = aiofcm.Message(
-                        device_token = t2,
-                        notification = {
-                            "title":notification_title,
-                            "body":notification_body,
-                            "sound":"default",
-                            "tag":link
-                        },
-                        data = {
-                            "click_action": "FLUTTER_NOTIFICATION_CLICK",
-                            "account": link
-                        },
-                        priority=aiofcm.PRIORITY_HIGH
-                    )
-                    await fcm.send_message(message)
-        elif r.app['subscriptions'].get(request_json['account']):
-            log.server_logger.info("Pushing to client %s", str(r.app['subscriptions'][request_json['account']]))
-            for sub in r.app['subscriptions'][request_json['account']]:
-                r.app['clients'][sub].send_str(json.dumps(request_json))
+        link = request_json['block']['link_as_account']
+        if r.app['subscriptions'].get(link):
+            log.server_logger.info("Pushing to clients %s", str(r.app['subscriptions'][link]))
+            for sub in r.app['subscriptions'][link]:
+                await r.app['clients'][sub].send_str(json.dumps(request_json))
+        # Push FCM notification if this is a send
+        if fcm_api_key is None:
+            return web.HTTPOk()
+        fcm_tokens = set(await get_fcm_tokens(link, r))
+        fcm_tokens_v2 = set(await get_fcm_tokens(link, r, v2=True))
+        if (fcm_tokens is None or len(fcm_tokens) == 0) and (fcm_tokens_v2 is None or len(fcm_tokens_v2) == 0):
+            return web.HTTPOk()
+        message = {
+            "action":"block",
+            "hash":request_json['block']['previous']
+        }
+        response = await rpc.json_post(message)
+        if response is None:
+            return web.HTTPOk()
+        # See if this block was already pocketed
+        cached_hash = await r.app['rdata'].get(f"link_{hash}")
+        if cached_hash is not None:
+            return web.HTTPOk()
+        prev_data = response
+        prev_data = prev_data['contents'] = json.loads(prev_data['contents'])
+        prev_balance = int(prev_data['contents']['balance'])
+        cur_balance = int(request_json['block']['balance'])
+        send_amount = prev_balance - cur_balance
+        if send_amount >= 1000000000000000000000000:
+            # This is a send, push notifications
+            fcm = aiofcm.FCM(fcm_sender_id, fcm_api_key)
+            # Send notification with generic title, send amount as body. App should have localizations and use this information at its discretion
+            for t in fcm_tokens:
+                message = aiofcm.Message(
+                            device_token=t,
+                            data = {
+                                "amount": str(send_amount)
+                            },
+                            priority=aiofcm.PRIORITY_HIGH
+                )
+                await fcm.send_message(message)
+            notification_title = f"Received {util.raw_to_nano(send_amount)} {'NANO' if not banano_mode else 'BANANO'}"
+            notification_body = f"Open {'Natrium' if not banano_mode else 'Kalium'} to view this transaction."
+            for t2 in fcm_tokens_v2:
+                message = aiofcm.Message(
+                    device_token = t2,
+                    notification = {
+                        "title":notification_title,
+                        "body":notification_body,
+                        "sound":"default",
+                        "tag":link
+                    },
+                    data = {
+                        "click_action": "FLUTTER_NOTIFICATION_CLICK",
+                        "account": link
+                    },
+                    priority=aiofcm.PRIORITY_HIGH
+                )
+                await fcm.send_message(message)
         return web.HTTPOk()
     except Exception:
         log.server_logger.exception("received exception in callback")
