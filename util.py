@@ -59,14 +59,23 @@ class Util:
         return result
 
     def minimalNumber(self, x):
-        if type(x) is str:
-            if x == '':
-                x = 0
-        f = float(x)
-        if f.is_integer():
-            return int(f)
-        else:
-            return round(f, 2 if self.banano_mode else 6)
+        strnum = '{0:.2f}'.format(x) if self.banano_mode else '{0:.6f}'.format(x)
+        splitstr = strnum.split('.')
+        if len(splitstr) == 1:
+            return splitstr[0]
+        elif int(splitstr[1]) == 0:
+            return splitstr[0]
+        # Remove extra decimals
+        ret = splitstr[0] + "."
+        digits = splitstr[1]
+        endIndex = len(digits)
+        for i in range(1, len(digits) + 1):
+            if int(digits[len(digits) - i]) == 0:
+                endIndex-=1
+            else:
+                break
+        digits = digits[0:endIndex]
+        return ret + digits
 
     def raw_to_nano(self, raw_amt : int):
         nano_amt = raw_amt / self.raw_per_nano
