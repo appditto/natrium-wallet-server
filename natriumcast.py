@@ -55,6 +55,7 @@ except Exception:
 # Environment configuration
 
 rpc_url = os.getenv('RPC_URL', 'http://[::1]:7076')
+work_url = os.getenv('WORK_URL', None)
 fcm_api_key = os.getenv('FCM_API_KEY', None)
 fcm_sender_id = os.getenv('FCM_SENDER_ID', None)
 debug_mode = True if int(os.getenv('DEBUG', 1)) != 0 else False
@@ -62,7 +63,7 @@ debug_mode = True if int(os.getenv('DEBUG', 1)) != 0 else False
 # Objects
 
 loop = asyncio.get_event_loop()
-rpc = RPC(rpc_url, banano_mode)
+rpc = RPC(rpc_url, banano_mode, work_url=work_url)
 util = Util(banano_mode)
 
 # all currency conversions that are available

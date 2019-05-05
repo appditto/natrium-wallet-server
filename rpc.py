@@ -16,15 +16,16 @@ allowed_rpc_actions = ["account_balance", "account_block_count", "account_check"
                        "pending_exists", "price_data", "work_generate", "fcm_update"]
 
 class RPC:
-    def __init__(self, node_url : str, banano_mode : bool):
+    def __init__(self, node_url : str, banano_mode : bool, work_url : str = None):
         self.node_url = node_url
+        self.work_url = work_url
         self.banano_mode = banano_mode
         self.util = Util(banano_mode)
 
-    async def json_post(self, request_json : dict, timeout : int = 30) -> dict:
+    async def json_post(self, request_json : dict, timeout : int = 30, is_work : bool = False) -> dict:
         try:
             async with ClientSession() as session:
-                async with session.post(self.node_url, json=request_json, timeout=timeout) as resp:
+                async with session.post(self.work_url if is_work and self.work_url is not None else self.node_url, json=request_json, timeout=timeout) as resp:
                     if resp.status > 299:
                         log.server_logger.error('Received status code %d from request %s', resp.status, json.dumps(request_json))
                         raise Exception
@@ -152,9 +153,9 @@ class RPC:
 
     async def work_request(self, request_json : dict) -> dict:
         """Send work_generate with use_peers injected"""
-        if 'use_peers' not in request_json:
+        if 'use_peers' not in request_json and self.work_url is None:
             request_json['use_peers'] = True
-        return await self.json_post(request_json)
+        return await self.json_post(request_json, is_work=True)
 
     async def work_defer(self, r : web.Request, uid : str, request_json : dict) -> str:
         """Request work_generate, but avoid duplicate requests"""
