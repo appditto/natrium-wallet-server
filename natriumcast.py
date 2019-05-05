@@ -550,7 +550,7 @@ async def send_prices(app):
             if len(app['clients']):
                 log.server_logger.info('pushing price data to %d connections', len(app['clients']))
                 btc = float(await app['rdata'].hget("prices", "coingecko:nano-btc"))
-                for client, ws in app['clients'].items():
+                for client, ws in list(app['clients'].items()):
                     try:
                         try:
                             currency = app['cur_prefs'][client]
