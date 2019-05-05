@@ -135,6 +135,28 @@ sudo apt install python-certbot-nginx
 sudo certbot --nginx
 ```
 
+## Work Server
+
+This server relies on the node for work with the `use_peers` option set to `true`. So you should define your work peers in the config.json as below (if you have any):
+
+```
+work_peers: [
+  "::ffff:127.0.0.1:5555"
+]
+```
+
+dPOW support has been removed, because it is recommended to use [Betsy](https://github.com/bbedward/betsy-middleware) if you need that.
+
+## Callback
+
+Callback is required for push notifications and pushing new blocks to clients. This can be configured in the node's config.json as follows:
+
+```
+"callback_address": "::ffff:127.0.0.1",
+"callback_port": "5076",
+"callback_target": "\/callback",
+```
+
 ## [optional] haproxy node load balancing
 Multiple nodes may run on the same server as long as you change the RPC binding port for each. Same for the peering port.
 ```
