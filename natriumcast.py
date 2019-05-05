@@ -456,6 +456,12 @@ async def websocket_handler(r : web.Request):
     finally:
         if ws.id in r.app['clients']:
             del r.app['clients'][ws.id]
+        for acct in r.app['subscriptions']:
+            if ws.id in r.app['subscriptions'][acct]:
+                if len(r.app['subscriptions'][acct] == 1):
+                    del r.app['subscriptions'][acct]
+                else:
+                    r.app['subscriptions'][acct].remove(ws.id)
         await ws.close()
 
     return ws
