@@ -18,6 +18,7 @@ allowed_rpc_actions = ["account_balance", "account_block_count", "account_check"
 class RPC:
     def __init__(self, node_url : str, banano_mode : bool):
         self.node_url = node_url
+        self.banano_mode = banano_mode
         self.util = Util(banano_mode)
 
     async def json_post(self, request_json : dict, timeout : int = 30) -> dict:
@@ -37,7 +38,7 @@ class RPC:
         message = {
             "action":"pending",
             "account":account,
-            "threshold":str(10**24),
+            "threshold":str(10**24) if not self.banano_mode else str(10**27),
             "count":51
         }
         log.server_logger.info('sending get_pending_count; %s; %s', self.util.get_request_ip(r), uid)
