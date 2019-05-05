@@ -1,5 +1,15 @@
 # Natrium (NANO) and Kalium (BANANO) Wallet Server
 
+## What is Natrium, Kalium, NANO, BANANO?
+
+Natrium and Kalium are mobile wallets written with Flutter. NANO and BANANO are cryptocurrencies.
+
+| Link | Description |
+| :----- | :------ |
+[natrium.io](https://natrium.io) | Natrium Homepage
+[kalium.banano.cc](https://kalium.banano.cc) | Kalium Homepage
+[appditto.com](https://appditto.com) | Appditto Homepage
+
 ## Requirements
 
 **Requires Python 3.6 or Newer**
@@ -74,7 +84,7 @@ User=natriumuser
 Group=www-data
 EnvironmentFile=/home/natriumuser/natriumcast/.env
 WorkingDirectory=/home/natriumuser/natriumcast
-ExecStart=./venv/bin/python natriumcast.py --host 127.0.0.1 --port %i
+ExecStart=/home/natriumuser/natriumcast/venv/bin/python natriumcast.py --host 127.0.0.1 --port %i --log-file /tmp/natriumcast%i.log
 Restart=on-failure
 
 [Install]
