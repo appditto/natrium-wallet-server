@@ -52,6 +52,8 @@ except Exception:
     parser.print_help()
     sys.exit(0)
 
+price_prefix = 'coingecko:nano' if not banano_mode else 'coingecko:banano'
+
 # Environment configuration
 
 rpc_url = os.getenv('RPC_URL', 'http://[::1]:7076')
@@ -63,7 +65,7 @@ debug_mode = True if int(os.getenv('DEBUG', 1)) != 0 else False
 # Objects
 
 loop = asyncio.get_event_loop()
-rpc = RPC(rpc_url, banano_mode, work_url=work_url)
+rpc = RPC(rpc_url, banano_mode, work_url=work_url, price_prefix=price_prefix)
 util = Util(banano_mode)
 
 # all currency conversions that are available
@@ -299,7 +301,7 @@ async def handle_user_message(r : web.Request, msg : WSMessage, ws : web.WebSock
                     if request_json['currency'].upper() in currency_list:
                         try:
                             price = await r.app['rdata'].hget("prices",
-                                                "coingecko:nano-" + request_json['currency'].lower())
+                                                f"{price_prefix}-" + request_json['currency'].lower())
                             reply = json.dumps({
                                 'currency': request_json['currency'].lower(),
                                 'price': str(price)
@@ -550,14 +552,14 @@ async def send_prices(app):
         try:
             if len(app['clients']):
                 log.server_logger.info('pushing price data to %d connections', len(app['clients']))
-                btc = float(await app['rdata'].hget("prices", "coingecko:nano-btc"))
+                btc = float(await app['rdata'].hget("prices", f"{price_prefix}-btc"))
                 for client, ws in list(app['clients'].items()):
                     try:
                         try:
                             currency = app['cur_prefs'][client]
                         except Exception:
                             currency = 'usd'
-                        price = float(await app['rdata'].hget("prices", "coingecko:nano-" + currency.lower()))
+                        price = float(await app['rdata'].hget("prices", f"{price_prefix}-" + currency.lower()))
 
                         await ws.send_str(
                             '{"currency":"' + currency.lower() + '","price":' + str(price) + ',"btc":' + str(btc) + '}')

@@ -16,11 +16,12 @@ allowed_rpc_actions = ["account_balance", "account_block_count", "account_check"
                        "pending_exists", "price_data", "work_generate", "fcm_update"]
 
 class RPC:
-    def __init__(self, node_url : str, banano_mode : bool, work_url : str = None):
+    def __init__(self, node_url : str, banano_mode : bool, work_url : str = None, price_prefix : str = None):
         self.node_url = node_url
         self.work_url = work_url
         self.banano_mode = banano_mode
         self.util = Util(banano_mode)
+        self.price_prefix = price_prefix
 
     async def json_post(self, request_json : dict, timeout : int = 30, is_work : bool = False) -> dict:
         try:
@@ -74,8 +75,8 @@ class RPC:
                 r.app['subscriptions'][account].add(ws.id)
             r.app['cur_prefs'][ws.id] = await r.app['rdata'].hget(ws.id, "currency")
             await r.app['rdata'].hset(ws.id, "last-connect", float(time.time()))
-            price_cur = await r.app['rdata'].hget("prices", "coingecko:nano-" + r.app['cur_prefs'][ws.id].lower())
-            price_btc = await r.app['rdata'].hget("prices", "coingecko:nano-btc")
+            price_cur = await r.app['rdata'].hget("prices", f"{price_prefix}-" + r.app['cur_prefs'][ws.id].lower())
+            price_btc = await r.app['rdata'].hget("prices", f"{price_prefix}-btc")
             response['currency'] = r.app['cur_prefs'][ws.id].lower()
             response['price'] = float(price_cur)
             response['btc'] = float(price_btc)
@@ -115,8 +116,8 @@ class RPC:
             await r.app['rdata'].hset(ws.id, "currency", currency)
             await r.app['rdata'].hset(ws.id, "last-connect", float(time.time()))
             response['uuid'] = ws.id
-            price_cur = await r.app['rdata'].hget("prices", "coingecko:nano-" + r.app['cur_prefs'][ws.id].lower())
-            price_btc = await r.app['rdata'].hget("prices", "coingecko:nano-btc")
+            price_cur = await r.app['rdata'].hget("prices", f"{price_prefix}-" + r.app['cur_prefs'][ws.id].lower())
+            price_btc = await r.app['rdata'].hget("prices", f"{price_prefix}-btc")
             response['currency'] = r.app['cur_prefs'][ws.id].lower()
             response['price'] = float(price_cur)
             response['btc'] = float(price_btc)
