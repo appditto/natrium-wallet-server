@@ -80,6 +80,8 @@ class RPC:
             response['currency'] = r.app['cur_prefs'][ws.id].lower()
             response['price'] = float(price_cur)
             response['btc'] = float(price_btc)
+            if self.banano_mode:
+                response['nano'] = float(await r.app['rdata'].hget("prices", f"{self.price_prefix}-nano"))
             response['pending_count'] = await self.get_pending_count(r, account, uid = ws.id)
             response = json.dumps(response)
 
@@ -121,6 +123,8 @@ class RPC:
             response['currency'] = r.app['cur_prefs'][ws.id].lower()
             response['price'] = float(price_cur)
             response['btc'] = float(price_btc)
+            if self.banano_mode:
+                response['nano'] = float(await r.app['rdata'].hget("prices", f"{self.price_prefix}-nano"))
             response['pending_count'] = await self.get_pending_count(r, account)
             response = json.dumps(response)
 
