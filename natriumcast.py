@@ -149,11 +149,10 @@ async def get_fcm_tokens(account : str, r : web.Request, v2 : bool = False) -> l
 ### END Utility functions
 
 # Primary handler for all websocket connections
-async def handle_user_message(r : web.Request, msg : WSMessage, ws : web.WebSocketResponse = None):
+async def handle_user_message(r : web.Request, message : str, ws : web.WebSocketResponse = None):
     """Process data sent by client"""
     address = util.get_request_ip(r)
-    message = msg.data
-    uid = ws.id if ws is not None else 0
+    uid = ws.id if ws is not None else '0'
     now = int(round(time.time() * 1000))
     if address in r.app['last_msg']:
         if (now - r.app['last_msg'][address]['last']) < 25:
@@ -442,7 +441,7 @@ async def websocket_handler(r : web.Request):
                 if msg.data == 'close':
                     await ws.close()
                 else:
-                    reply = await handle_user_message(r, msg, ws=ws)
+                    reply = await handle_user_message(r, msg.data, ws=ws)
                     if reply is not None:
                         log.server_logger.debug('Sending response %s to %s', reply, util.get_request_ip(r))
                         await ws.send_str(reply)
@@ -470,6 +469,19 @@ async def websocket_handler(r : web.Request):
         await ws.close()
 
     return ws
+
+async def http_api(r: web.Request):
+    try:
+        request_json = await r.json()
+        reply = await handle_user_message(r, json.dumps(request_json))
+        if reply is not None:
+            return web.json_response(data=json.loads(reply))
+        else:
+            return web.json_response(data={'error':'bad request'})
+    except Exception:
+        log.server_logger.exception("received exception in http_api")
+        return web.HTTPInternalServerError(reason=f"Something went wrong {str(sys.exc_info())}")
+
 
 async def callback(r : web.Request):
     try:
@@ -615,6 +627,7 @@ async def init_app():
     app = web.Application()
     app.add_routes([web.get('/', websocket_handler)]) # All WS requests
     app.add_routes([web.post('/callback', callback)]) # HTTP Callback from node
+    app.add_routes([web.post('/api', http_api)])      # HTTP API
     #app.add_routes([web.post('/callback', callback)])
     app.on_startup.append(open_redis)
     app.on_shutdown.append(close_redis)
