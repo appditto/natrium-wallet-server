@@ -248,8 +248,6 @@ async def handle_user_message(r : web.Request, message : str, ws : web.WebSocket
                             account = account.replace('nano_', 'xrb_')
                             await r.app['rdata'].hset(uid, "account", json.dumps(account_list))
                         await rpc.rpc_reconnect(ws, r, account)
-                        await r.app['rdata'].rpush("conntrack",
-                                    str(float(time.time())) + ":" + uid + ":connect:" + address)
                         # Store FCM token for this account, for push notifications
                         if 'fcm_token' in request_json:
                             await update_fcm_token_for_account(account, request_json['fcm_token'], r)
@@ -272,7 +270,6 @@ async def handle_user_message(r : web.Request, message : str, ws : web.WebSocket
                         else:
                             currency = 'usd'
                         await rpc.rpc_subscribe(ws, r, request_json['account'].replace("nano_", "xrb_"), currency)
-                        await r.app['rdata'].rpush(f"conntrack {str(float(time.time()))}:{uid}:connect:{address}")
                         # Store FCM token if available, for push notifications
                         if 'fcm_token' in request_json:
                             await update_fcm_token_for_account(request_json['account'], request_json['fcm_token'], r)
