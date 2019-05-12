@@ -71,7 +71,7 @@ util = Util(banano_mode)
 # all currency conversions that are available
 currency_list = ["BTC", "ARS", "AUD", "BRL", "CAD", "CHF", "CLP", "CNY", "CZK", "DKK", "EUR", "GBP", "HKD", "HUF", "IDR",
                  "ILS", "INR", "JPY", "KRW", "MXN", "MYR", "NOK", "NZD", "PHP", "PKR", "PLN", "RUB", "SEK", "SGD",
-                 "THB", "TRY", "TWD", "USD", "VES", "ZAR"]
+                 "THB", "TRY", "TWD", "USD", "VES", "ZAR", "SAR", "AED", "KWD"]
 
 # Push notifications
 
