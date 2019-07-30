@@ -217,7 +217,8 @@ async def handle_user_message(r : web.Request, message : str, ws : web.WebSocket
                                 await r.app['rdata'].hset(request_json['uuid'], "account", json.dumps(account_list))
                 # already subscribed, reconnect (websocket connections)
                 if 'uuid' in request_json and resubscribe:
-                    del r.app['clients'][uid]
+                    if uid in r.app['clients']:
+                        del r.app['clients'][uid]
                     uid = request_json['uuid']
                     ws.id = uid
                     r.app['clients'][uid] = ws
@@ -242,10 +243,10 @@ async def handle_user_message(r : web.Request, message : str, ws : web.WebSocket
                         else:
                             # Legacy connections
                             account = account_list[0]
-                        if 'nano_' in account:
-                            account_list.remove(account)
-                            account_list.append(account.replace("nano_", "xrb_"))
-                            account = account.replace('nano_', 'xrb_')
+                        if account.replace("nano_", "xrb_") in account_list:
+                            account_list.remove(account.replace("nano_", "xrb_"))
+                            account = account.replace('xrb_', 'nano_')
+                            account_list.append(account)
                             await r.app['rdata'].hset(uid, "account", json.dumps(account_list))
                         await rpc.rpc_reconnect(ws, r, account)
                         # Store FCM token for this account, for push notifications
