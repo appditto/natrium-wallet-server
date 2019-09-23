@@ -334,25 +334,6 @@ async def handle_user_message(r : web.Request, message : str, ws : web.WebSocket
                         'error': 'account check error',
                         'detail': str(e)
                     })
-            # rpc: work_generate
-            elif request_json['action'] == "work_generate":
-                """
-                If we care about blocking work to specific client versions we can so here:
-                if r.headers.get('X-Client-Version') is None:
-                    xcver = 0
-                else:
-                    xcver = int(r.headers.get('X-Client-Version'))
-                """
-                try:
-                    reply = await rpc.work_defer(r, uid, request_json)
-                    ret = json.dumps(reply)
-                except Exception as e:
-                    log.server_logger.error('work RPC error; %s;%s;%s;User-Agent:%s',
-                        str(e), util.get_request_ip(r), uid, r.headers.get('User-Agent'))
-                    ret = json.dumps({
-                        'error':'work RPC error',
-                        'detail':str(e)
-                    })
             # rpc: process
             elif request_json['action'] == "process":
                 try:
