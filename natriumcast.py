@@ -623,7 +623,7 @@ async def init_app():
     return app
 
 app = loop.run_until_complete(init_app())
-sio = socketio.AsyncServer(async_mode='aiohttp')
+sio = socketio.AsyncServer(async_mode='aiohttp', cors_allowed_origins='*')
 sio.attach(app)
 
 def main():
