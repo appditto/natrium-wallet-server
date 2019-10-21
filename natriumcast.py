@@ -12,6 +12,7 @@ import sys
 import time
 import uuid
 import uvloop
+import socketio
 from logging.handlers import TimedRotatingFileHandler, WatchedFileHandler
 
 import aiofcm
@@ -474,6 +475,14 @@ async def callback(r : web.Request):
             log.server_logger.info("Pushing to clients %s", str(r.app['subscriptions'][link]))
             for sub in r.app['subscriptions'][link]:
                 await r.app['clients'][sub].send_str(json.dumps(request_json))
+
+        # If natrium account and send, send to web page for donations
+        if 'is_send' in request_json and (request_json['is_send'] or request_json['is_send'] == 'true') and link == 'nano_1natrium1o3z5519ifou7xii8crpxpk8y65qmkih8e8bpsjri651oza8imdd':
+            log.server_logger.info('Detected send to natrium account')
+            if 'amount' in request_json:
+                log.server_logger.info(f'emitting donation event for amount: {request_json["amount"]}')
+                await sio.emit('donation_event', {'amount':request_json['amount']})
+
         # Push FCM notification if this is a send
         if fcm_api_key is None:
             return web.HTTPOk()
@@ -614,6 +623,8 @@ async def init_app():
     return app
 
 app = loop.run_until_complete(init_app())
+sio = socketio.AsyncServer(async_mode='aiohttp')
+sio.attach(app)
 
 def main():
     """Main application loop"""
