@@ -278,6 +278,8 @@ class RPC:
                 'error':'rpc pending error'
             }
         else:
+            return response
+            # TODO - fix me
             # sort dict keys by amount value within, descending
             newlist = sorted(response['blocks'], key=lambda x: (int(response['blocks'][x]['amount'])), reverse=True)
             # only provide the first 10
