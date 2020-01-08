@@ -16,8 +16,8 @@ import socketio
 from logging.handlers import TimedRotatingFileHandler, WatchedFileHandler
 
 import aiofcm
+import aioredis
 from aiohttp import ClientSession, WSMessage, WSMsgType, log, web
-from aioredis import create_redis
 
 from rpc import RPC, allowed_rpc_actions
 from util import Util
@@ -31,12 +31,16 @@ parser.add_argument('-b', '--banano', action='store_true', help='Run for BANANO 
 parser.add_argument('--host', type=str, help='Host to listen on (e.g. 127.0.0.1)', default='127.0.0.1')
 parser.add_argument('--path', type=str, help='(Optional) Path to run application on (for unix socket, e.g. /tmp/natriumapp.sock', default=None)
 parser.add_argument('-p', '--port', type=int, help='Port to listen on', default=5076)
+parser.add_argument('--redis-host', type=str, help='Redis (e.g. 127.0.0.1)', default='127.0.0.1')
+parser.add_argument('-rp', '--redis-port', type=int, help='Port redis is running on', default=6379)
 parser.add_argument('--log-file', type=str, help='Log file location', default='natriumcast.log')
 options = parser.parse_args()
 
 try:
     listen_host = str(ipaddress.ip_address(options.host))
     listen_port = int(options.port)
+    redis_host = str(ipaddress.ip_address(options.redis_host))
+    redis_port = int(options.redis_port)
     log_file = options.log_file
     app_path = options.path
     if app_path is None:
@@ -588,10 +592,10 @@ async def init_app():
     async def open_redis(app):
         """Open redis connections"""
         log.server_logger.info("Opening redis connections")
-        app['rfcm'] = await create_redis(('localhost', 6379),
-                                                db=1, encoding='utf-8')
-        app['rdata'] = await create_redis(('localhost', 6379),
-                                                db=2, encoding='utf-8')
+        app['rfcm'] = await aioredis.create_redis_pool((redis_host, redis_port),
+                                                db=1, encoding='utf-8', minsize=2, maxsize=15)
+        app['rdata'] = await aioredis.create_redis_pool((redis_host, redis_port),
+                                                db=2, encoding='utf-8', minsize=2, maxsize=15)
         # Global vars
         app['clients'] = {} # Keep track of connected clients
         app['last_msg'] = {} # Last time a client has sent a message
