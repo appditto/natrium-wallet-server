@@ -478,7 +478,8 @@ async def callback(r : web.Request):
         if r.app['subscriptions'].get(link):
             log.server_logger.info("Pushing to clients %s", str(r.app['subscriptions'][link]))
             for sub in r.app['subscriptions'][link]:
-                await r.app['clients'][sub].send_str(json.dumps(request_json))
+                if sub in r.app['clients']:
+                    await r.app['clients'][sub].send_str(json.dumps(request_json))
 
         # If natrium account and send, send to web page for donations
         if 'is_send' in request_json and (request_json['is_send'] or request_json['is_send'] == 'true') and link == 'nano_1natrium1o3z5519ifou7xii8crpxpk8y65qmkih8e8bpsjri651oza8imdd':
