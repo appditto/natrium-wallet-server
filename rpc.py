@@ -190,8 +190,12 @@ class RPC:
     async def process_defer(self, r : web.Request, uid : str, block : dict, do_work : bool) -> dict:
         # Let's cache the link because, due to callback delay it's possible a client can receive
         # a push notification for a block it already knows about
+        is_change = False
         if 'link' in block:
-            await r.app['rdata'].set(f"link_{block['link']}", "1", expire=3600)
+            if block['link'].replace('0', '') == '':
+                is_change = True
+            else:
+                await r.app['rdata'].set(f"link_{block['link']}", "1", expire=3600)
 
         # check for receive race condition
         # if block['type'] == 'state' and block['previous'] and block['balance'] and block['link']:
@@ -260,10 +264,14 @@ class RPC:
                     'error':"Failed work_generate in process request"
                 }
 
-        return await self.json_post({
-            'action': 'process',
+        process_request = {
+            'action':'process',
             'block': json.dumps(block)
-        })
+        }
+        if is_change:
+            process_request['subtype'] = 'change'
+
+        return await self.json_post(process_request)
 
     # Since someone might get cute and attempt to spam users with low-value transactions in an effort to deny them the
     # ability to receive, we will take the performance hit for them and pull all pending block data. Then we will sort by
