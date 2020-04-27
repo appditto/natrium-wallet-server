@@ -648,7 +648,6 @@ def main():
     # Start web/ws server
     async def start():
         runner = web.AppRunner(app)
-        await ws.setup()
         await runner.setup()
         if app_path is not None:
             site = web.UnixSite(runner, app_path)
@@ -658,6 +657,8 @@ def main():
 
     async def end():
         await app.shutdown()
+
+    loop.run_until_complete(ws.setup())
 
     tasks = [
         start(),
