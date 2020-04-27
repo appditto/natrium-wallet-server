@@ -469,6 +469,7 @@ async def http_api(r: web.Request):
         return web.HTTPInternalServerError(reason=f"Something went wrong {str(sys.exc_info())}")
 
 async def callback_ws(app: web.Application, data: dict):
+    log.server_logger.info(f"RECEIVED CALLBACK {json.dumps(data)}")
     link = data['block']['link_as_account']
     if app['subscriptions'].get(link):
         log.server_logger.info("Pushing to clients %s", str(app['subscriptions'][link]))
