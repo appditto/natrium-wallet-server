@@ -644,7 +644,7 @@ def main():
 
     # Periodic price job
     price_task = loop.create_task(send_prices(app))
-    ws = WebsocketClient(options.websocket_url, callback_ws)
+    ws = WebsocketClient(app, options.websocket_url, callback_ws)
 
     # Start web/ws server
     async def start():
