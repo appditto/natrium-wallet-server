@@ -1,10 +1,12 @@
-import requests, redis, json
+import requests
+import redis
+import json
+import os
 
-#rblocks = redis.StrictRedis(host='localhost', port=6379, db=0)
-#rwork = redis.StrictRedis(host='localhost', port=6379, db=1)
-rdata = redis.StrictRedis(host='localhost', port=6379, db=2)
+rdata = redis.StrictRedis(host=os.getenv(
+    'REDIS_HOST', 'localhost'), port=6379, db=int(os.getenv('REDIS_DB', '2')))
 
-dolartoday_price='https://s3.amazonaws.com/dolartoday/data.json'
+dolartoday_price = 'https://s3.amazonaws.com/dolartoday/data.json'
 
 def dolartoday_bolivar():
     response = json.loads(requests.get(url=dolartoday_price).text)
@@ -15,7 +17,10 @@ def dolartoday_bolivar():
     if bolivarprice is None:
         print("Couldn't find localbitcoin_ref price")
         return
-    print(rdata.hset("prices", "dolartoday:usd-ves", bolivarprice),"DolarToday USD-VES", bolivarprice)
+    print(rdata.hset("prices", "dolartoday:usd-ves", bolivarprice),
+          "DolarToday USD-VES", bolivarprice)
+
 
 dolartoday_bolivar()
-print("DolarToday USD-VES:", rdata.hget("prices", "dolartoday:usd-ves").decode('utf-8'))
+print("DolarToday USD-VES:", rdata.hget("prices",
+                                        "dolartoday:usd-ves").decode('utf-8'))

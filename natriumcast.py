@@ -31,15 +31,15 @@ parser.add_argument('-b', '--banano', action='store_true', help='Run for BANANO 
 parser.add_argument('--host', type=str, help='Host to listen on (e.g. 127.0.0.1)', default='127.0.0.1')
 parser.add_argument('--path', type=str, help='(Optional) Path to run application on (for unix socket, e.g. /tmp/natriumapp.sock', default=None)
 parser.add_argument('-p', '--port', type=int, help='Port to listen on', default=5076)
-parser.add_argument('--redis-host', type=str, help='Redis (e.g. 127.0.0.1)', default='127.0.0.1')
-parser.add_argument('-rp', '--redis-port', type=int, help='Port redis is running on', default=6379)
 parser.add_argument('--log-file', type=str, help='Log file location', default='natriumcast.log')
+parser.add_argument('--log-to-stdout', action='store_true', help='Log to stdout', default=False)
+
 options = parser.parse_args()
 
 try:
     listen_host = str(ipaddress.ip_address(options.host))
     listen_port = int(options.port)
-    redis_host = str(ipaddress.ip_address(options.redis_host))
+    redis_host = os.getenv('REDIS_HOST', 'localhost')
     redis_port = int(options.redis_port)
     log_file = options.log_file
     app_path = options.path
@@ -81,11 +81,11 @@ currency_list = ["BTC", "ARS", "AUD", "BRL", "CAD", "CHF", "CLP", "CNY", "CZK", 
 # Push notifications
 
 async def delete_fcm_token_for_account(account : str, token : str, r : web.Request):
-    await r.app['rfcm'].delete(token)
+    await r.app['rdata'].delete(token)
 
 async def update_fcm_token_for_account(account : str, token : str, r : web.Request, v2 : bool = False):
     """Store device FCM registration tokens in redis"""
-    redisInst = r.app['rfcm'] if v2 else r.app['rdata']
+    redisInst = r.app['rdata']
     await set_or_upgrade_token_account_list(account, token, r, v2=v2)
     # Keep a list of tokens associated with this account
     cur_list = await redisInst.get(account)
@@ -100,7 +100,7 @@ async def update_fcm_token_for_account(account : str, token : str, r : web.Reque
     await redisInst.set(account, json.dumps(cur_list))
 
 async def get_or_upgrade_token_account_list(account : str, token : str, r : web.Request, v2 : bool = False) -> list:
-    redisInst = r.app['rfcm'] if v2 else r.app['rdata']
+    redisInst = r.app['rdata']
     curTokenList = await redisInst.get(token)
     if curTokenList is None:
         return []
@@ -116,7 +116,7 @@ async def get_or_upgrade_token_account_list(account : str, token : str, r : web.
     return json.loads(await redisInst.get(token))
 
 async def set_or_upgrade_token_account_list(account : str, token : str, r : web.Request, v2 : bool = False) -> list:
-    redisInst = r.app['rfcm'] if v2 else r.app['rdata']
+    redisInst = r.app['rdata']
     curTokenList = await redisInst.get(token)
     if curTokenList is None:
         await redisInst.set(token, json.dumps([account]), expire=2592000) 
@@ -133,7 +133,7 @@ async def set_or_upgrade_token_account_list(account : str, token : str, r : web.
 
 async def get_fcm_tokens(account : str, r : web.Request, v2 : bool = False) -> list:
     """Return list of FCM tokens that belong to this account"""
-    redisInst = r.app['rfcm'] if v2 else r.app['rdata']
+    redisInst = r.app['rdata']
     tokens = await redisInst.get(account)
     if tokens is None:
         return []
@@ -587,16 +587,13 @@ async def init_app():
     async def close_redis(app):
         """Close redis connections"""
         log.server_logger.info('Closing redis connections')
-        app['rfcm'].close()
         app['rdata'].close()
 
     async def open_redis(app):
         """Open redis connections"""
         log.server_logger.info("Opening redis connections")
-        app['rfcm'] = await aioredis.create_redis_pool((redis_host, redis_port),
-                                                db=1, encoding='utf-8', minsize=2, maxsize=15)
         app['rdata'] = await aioredis.create_redis_pool((redis_host, redis_port),
-                                                db=2, encoding='utf-8', minsize=2, maxsize=15)
+                                                db=int(os.getenv('REDIS_DB', '2')), encoding='utf-8', minsize=2, maxsize=15)
         # Global vars
         app['clients'] = {} # Keep track of connected clients
         app['last_msg'] = {} # Last time a client has sent a message
@@ -611,11 +608,17 @@ async def init_app():
     else:
         root = logging.getLogger('aiohttp.server')
         logging.basicConfig(level=logging.INFO)
-        handler = WatchedFileHandler(log_file)
-        formatter = logging.Formatter("%(asctime)s;%(levelname)s;%(message)s", "%Y-%m-%d %H:%M:%S %z")
-        handler.setFormatter(formatter)
-        root.addHandler(handler)
-        root.addHandler(TimedRotatingFileHandler(log_file, when="d", interval=1, backupCount=100))        
+        if options.log_to_stdout:
+            handler = logging.StreamHandler(sys.stdout)
+            formatter = logging.Formatter("%(asctime)s;%(levelname)s;%(message)s", "%Y-%m-%d %H:%M:%S %z")
+            handler.setFormatter(formatter)
+            root.addHandler(handler)
+        else:
+            handler = WatchedFileHandler(log_file)
+            formatter = logging.Formatter("%(asctime)s;%(levelname)s;%(message)s", "%Y-%m-%d %H:%M:%S %z")
+            handler.setFormatter(formatter)
+            root.addHandler(handler)
+            root.addHandler(TimedRotatingFileHandler(log_file, when="d", interval=1, backupCount=100))        
 
     app = web.Application()
     app.add_routes([web.get('/', websocket_handler)]) # All WS requests

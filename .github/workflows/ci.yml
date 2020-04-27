@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build_and_publish:
+    name: Build and Publish Server Image
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_RUN_ID: ${{ github.run_id }}    
+    steps:
+      - uses: nelonoel/branch-name@v1
+      - uses: actions/checkout@master   
+      - name: Login to registry
+        uses: actions-hub/docker/login@master
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USER }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and tag
+        if: success()
+        run: docker build -t appditto/natrium-server:${BRANCH_NAME}-${{ env.GITHUB_RUN_ID }} server
+
+      - name: Push image   
+        if: success()
+        uses: actions-hub/docker@master
+        with:
+          args: push appditto/natrium-server:${BRANCH_NAME}-${{ env.GITHUB_RUN_ID }}
+
+  deploy:
+    name: Deploy natrium server
+    needs: build_and_publish
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: nelonoel/branch-name@v1
+      - uses: actions/checkout@master   
+      - uses: imranismail/setup-kustomize@v1
+        with:
+          kustomize-version: "3.5.4"
+
+      - name: Set image
+        working-directory: ./kubernetes
+        run: |
+          kustomize edit set image replaceme=${{ secrets.DOCKER_REPO }}/appditto-python-server:${BRANCH_NAME}-${{ env.GITHUB_RUN_ID }}
+          kustomize build . > deployment-k.yaml
+
+      - name: Deploy image to k8s cluster
+        uses: bbedward/kubectl@master
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        with:
+          args: apply -f ./kubernetes/deployment-k.yaml
+      

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: natrium-server
+  namespace: natrium
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5076
+    targetPort: 5076
+    name: api
+  selector:
+    app: natrium-server
