@@ -14,6 +14,11 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "1800"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
     nginx.ingress.kubernetes.io/upstream-hash-by: $remote_addr
+    nginx.ingress.kubernetes.io/server-snippet: |-
+      location /callback {
+          deny all;
+          return 404;
+      }
 spec:
   tls:
   - hosts:
