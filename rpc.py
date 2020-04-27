@@ -1,4 +1,4 @@
-import json
+import rapidjson as json
 import sys
 import time
 

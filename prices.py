@@ -1,5 +1,5 @@
 import redis
-import json
+import rapidjson as json
 import os
 import time
 import sys

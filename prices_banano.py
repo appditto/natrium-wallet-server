@@ -2,7 +2,7 @@ import redis
 import urllib3
 import certifi
 import socket
-import json
+import rapidjson as json
 import time
 import os
 import sys

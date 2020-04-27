@@ -8,3 +8,5 @@ python-dotenv
 pylint
 uvloop
 python-socketio
+websockets
+python-rapidjson

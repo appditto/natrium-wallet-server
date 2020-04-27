@@ -5,7 +5,7 @@ load_dotenv()
 import argparse
 import asyncio
 import ipaddress
-import json
+import rapidjson as json
 import logging
 import os
 import sys
@@ -21,6 +21,7 @@ from aiohttp import ClientSession, WSMessage, WSMsgType, log, web
 
 from rpc import RPC, allowed_rpc_actions
 from util import Util
+from nano_websocket import WebsocketClient
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
@@ -31,6 +32,7 @@ parser.add_argument('-b', '--banano', action='store_true', help='Run for BANANO 
 parser.add_argument('--host', type=str, help='Host to listen on (e.g. 127.0.0.1)', default='127.0.0.1')
 parser.add_argument('--path', type=str, help='(Optional) Path to run application on (for unix socket, e.g. /tmp/natriumapp.sock', default=None)
 parser.add_argument('-p', '--port', type=int, help='Port to listen on', default=5076)
+parser.add_argument('-ws', '--websocket-url', type=str, help='Nano websocket URI', default='ws://[::1]:7078')
 parser.add_argument('--log-file', type=str, help='Log file location', default='natriumcast.log')
 parser.add_argument('--log-to-stdout', action='store_true', help='Log to stdout', default=False)
 
@@ -466,6 +468,14 @@ async def http_api(r: web.Request):
         log.server_logger.exception("received exception in http_api")
         return web.HTTPInternalServerError(reason=f"Something went wrong {str(sys.exc_info())}")
 
+async def callback_ws(app: web.Application, data: dict):
+    data['block'] = json.loads(data['block'])
+    link = data['block']['link_as_account']
+    if app['subscriptions'].get(link):
+        log.server_logger.info("Pushing to clients %s", str(app['subscriptions'][link]))
+        for sub in app['subscriptions'][link]:
+            if sub in app['clients']:
+                await app['clients'][sub].send_str(json.dumps(data))
 
 async def callback(r : web.Request):
     try:
@@ -475,11 +485,6 @@ async def callback(r : web.Request):
         request_json['block'] = json.loads(request_json['block'])
 
         link = request_json['block']['link_as_account']
-        if r.app['subscriptions'].get(link):
-            log.server_logger.info("Pushing to clients %s", str(r.app['subscriptions'][link]))
-            for sub in r.app['subscriptions'][link]:
-                if sub in r.app['clients']:
-                    await r.app['clients'][sub].send_str(json.dumps(request_json))
 
         # If natrium account and send, send to web page for donations
         if 'is_send' in request_json and (request_json['is_send'] or request_json['is_send'] == 'true') and link == 'nano_1natrium1o3z5519ifou7xii8crpxpk8y65qmkih8e8bpsjri651oza8imdd':
@@ -639,10 +644,12 @@ def main():
 
     # Periodic price job
     price_task = loop.create_task(send_prices(app))
+    ws = WebsocketClient(options.websocket_url, callback_ws)
 
     # Start web/ws server
     async def start():
         runner = web.AppRunner(app)
+        await ws.setup()
         await runner.setup()
         if app_path is not None:
             site = web.UnixSite(runner, app_path)
@@ -653,7 +660,12 @@ def main():
     async def end():
         await app.shutdown()
 
-    loop.run_until_complete(start())
+    tasks = [
+        start(),
+        ws.loop()
+    ]
+
+    loop.run_until_complete(asyncio.wait(tasks))
 
     # Main program
     try:

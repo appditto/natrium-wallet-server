@@ -19,6 +19,8 @@ spec:
         ports:
         - containerPort: 5076
           name: api
+        command: ["/bin/bash", "-c"]
+        args: ["python natriumcast.py --host 0.0.0.0 --log-to-stdout --ws-url ws://nano-node.nano:7078"]
         env:
           - name: REDIS_HOST
             value: redis-0.redis

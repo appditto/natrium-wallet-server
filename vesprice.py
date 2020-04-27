@@ -1,6 +1,6 @@
 import requests
 import redis
-import json
+import rapidjson as json
 import os
 
 rdata = redis.StrictRedis(host=os.getenv(
