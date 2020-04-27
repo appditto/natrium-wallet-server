@@ -643,33 +643,31 @@ def main():
 
     # Periodic price job
     price_task = loop.create_task(send_prices(app))
-    ws = WebsocketClient(app, options.websocket_url, callback_ws)
 
     # Start web/ws server
     async def start():
         runner = web.AppRunner(app)
+        tasks = [
+
+        ]
         await runner.setup()
         if app_path is not None:
             site = web.UnixSite(runner, app_path)
         else:
             site = web.TCPSite(runner, listen_host, listen_port)
-        await site.start()
+        tasks.append(site.start())
+        # Websocket
+        ws = WebsocketClient(app, options.websocket_url, callback_ws)
+        await ws.setup()
+        tasks.append(ws.loop())
+        await asyncio.wait()
 
     async def end():
         await app.shutdown()
 
-    loop.run_until_complete(ws.setup())
-
-    tasks = [
-        start(),
-        ws.loop()
-    ]
-
-    loop.run_until_complete(asyncio.wait(tasks))
-
     # Main program
     try:
-        loop.run_forever()
+        loop.run_until_complete(start())
     except KeyboardInterrupt:
         pass
     finally:
