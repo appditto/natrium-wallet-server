@@ -33,10 +33,10 @@ spec:
           - name: FCM_API_KEY
             valueFrom:
               secretKeyRef:
-                key: natrium
-                name: fcm_api_key
+                name: natrium
+                key: fcm_api_key
           - name: FCM_SENDER_ID
             valueFrom:
               secretKeyRef:
-                key: natrium
-                name: fcm_sender
+                name: natrium
+                key: fcm_sender
