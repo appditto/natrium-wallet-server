@@ -657,6 +657,7 @@ def main():
             site = web.TCPSite(runner, listen_host, listen_port)
         tasks.append(site.start())
         # Websocket
+        log.server_logger.info(f"Attempting to open WS connection to {options.websocket_url}")
         ws = WebsocketClient(app, options.websocket_url, callback_ws)
         await ws.setup()
         tasks.append(ws.loop())
