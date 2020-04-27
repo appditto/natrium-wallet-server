@@ -40,7 +40,7 @@ try:
     listen_host = str(ipaddress.ip_address(options.host))
     listen_port = int(options.port)
     redis_host = os.getenv('REDIS_HOST', 'localhost')
-    redis_port = int(options.redis_port)
+    redis_port = 6379
     log_file = options.log_file
     app_path = options.path
     if app_path is None:
@@ -53,7 +53,7 @@ try:
     else:
         banano_mode = False
         print(f'Starting NATRIUM Server (NANO) {server_desc}')
-except Exception:
+except Exception as e:
     parser.print_help()
     sys.exit(0)
 
@@ -555,7 +555,7 @@ async def send_prices(app):
         # empty out this set periodically, to ensure clients dont somehow get stuck when an error causes their
         # work not to return
         try:
-            if len(app['clients']):
+            if 'clients' in app and len(app['clients']):
                 log.server_logger.info('pushing price data to %d connections', len(app['clients']))
                 btc = float(await app['rdata'].hget("prices", f"{price_prefix}-btc"))
                 if banano_mode:
