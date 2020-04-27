@@ -660,7 +660,7 @@ def main():
         ws = WebsocketClient(app, options.websocket_url, callback_ws)
         await ws.setup()
         tasks.append(ws.loop())
-        await asyncio.wait()
+        await asyncio.wait(tasks)
 
     async def end():
         await app.shutdown()
