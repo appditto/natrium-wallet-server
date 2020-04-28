@@ -474,6 +474,7 @@ async def callback_ws(app: web.Application, data: dict):
         log.server_logger.info("Pushing to clients %s", str(app['subscriptions'][link]))
         for sub in app['subscriptions'][link]:
             if sub in app['clients']:
+                data['is_send'] = 'true'
                 await app['clients'][sub].send_str(json.dumps(data))
 
 async def callback(r : web.Request):
