@@ -474,8 +474,15 @@ async def callback_ws(app: web.Application, data: dict):
         log.server_logger.info("Pushing to clients %s", str(app['subscriptions'][link]))
         for sub in app['subscriptions'][link]:
             if sub in app['clients']:
-                data['is_send'] = 'true'
-                await app['clients'][sub].send_str(json.dumps(data))
+                if data['block']['subtype'] == 'send':
+                    data['is_send'] = 'true'
+                    await app['clients'][sub].send_str(json.dumps(data))
+    # Send to natrium donations page
+    if data['block']['subtype'] == 'send' and link == 'nano_1natrium1o3z5519ifou7xii8crpxpk8y65qmkih8e8bpsjri651oza8imdd':
+        log.server_logger.info('Detected send to natrium account')
+        if 'amount' in data:
+            log.server_logger.info(f'emitting donation event for amount: {data["amount"]}')
+            await sio.emit('donation_event', {'amount':data['amount']})
 
 async def callback(r : web.Request):
     try:
@@ -485,13 +492,6 @@ async def callback(r : web.Request):
         request_json['block'] = json.loads(request_json['block'])
 
         link = request_json['block']['link_as_account']
-
-        # If natrium account and send, send to web page for donations
-        if 'is_send' in request_json and (request_json['is_send'] or request_json['is_send'] == 'true') and link == 'nano_1natrium1o3z5519ifou7xii8crpxpk8y65qmkih8e8bpsjri651oza8imdd':
-            log.server_logger.info('Detected send to natrium account')
-            if 'amount' in request_json:
-                log.server_logger.info(f'emitting donation event for amount: {request_json["amount"]}')
-                await sio.emit('donation_event', {'amount':request_json['amount']})
 
         # Push FCM notification if this is a send
         if fcm_api_key is None:
