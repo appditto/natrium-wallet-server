@@ -347,7 +347,10 @@ async def handle_user_message(r : web.Request, message : str, ws : web.WebSocket
                     do_work = False
                     if 'do_work' in request_json and request_json['do_work'] == True:
                         do_work = True
-                    reply = await rpc.process_defer(r, uid, json.loads(request_json['block']), do_work)
+                    subtype = None
+                    if 'subtype' in request_json:
+                        subtype = request_json['subtype']
+                    reply = await rpc.process_defer(r, uid, json.loads(request_json['block']), do_work, subtype=subtype)
                     if reply is None:
                         raise Exception
                     ret = json.dumps(reply)

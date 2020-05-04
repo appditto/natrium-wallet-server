@@ -187,11 +187,11 @@ class RPC:
     # Server-side check for any incidental mixups due to race conditions or misunderstanding protocol.
     # Check blocks submitted for processing to ensure the user or client has not accidentally created a send to an unknown
     # address due to balance miscalculation leading to the state block being interpreted as a send rather than a receive.
-    async def process_defer(self, r : web.Request, uid : str, block : dict, do_work : bool) -> dict:
+    async def process_defer(self, r : web.Request, uid : str, block : dict, do_work : bool, subtype: str = None) -> dict:
         # Let's cache the link because, due to callback delay it's possible a client can receive
         # a push notification for a block it already knows about
-        is_change = False
-        if 'link' in block:
+        is_change = True if subtype == 'change' else False
+        if not is_change and 'link' in block:
             if block['link'].replace('0', '') == '':
                 is_change = True
             else:
@@ -268,7 +268,9 @@ class RPC:
             'action':'process',
             'block': json.dumps(block)
         }
-        if is_change:
+        if subtype is not None:
+            process_request['subtype'] = subtype
+        elif is_change:
             process_request['subtype'] = 'change'
 
         return await self.json_post(process_request)
