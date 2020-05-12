@@ -16,6 +16,13 @@ spec:
       containers:
       - name: natrium-server
         image: replaceme
+        resources:
+          requests:
+            cpu: 250m
+            memory: 500Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
         ports:
         - containerPort: 5076
           name: api
