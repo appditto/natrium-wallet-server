@@ -36,6 +36,13 @@ def coingecko():
     rdata.hset("prices", "coingecko:nano-ves", convertedves)
     print("Coingecko NANO-VES", rdata.hget("prices",
                                            "coingecko:nano-ves").decode('utf-8'))
+    # Convert to ARS
+    price_ars = float(rdata.hget(
+        "prices", "dolarsi:usd-ars").decode('utf-8'))
+    converted_ars = usdprice * price_ars
+    rdata.hset("prices", "coingecko:nano-ars", converted_ars)
+    print("Coingecko NANO-ARS", rdata.hget("prices",
+                                           "coingecko:nano-ars").decode('utf-8'))
     print(rdata.hset("prices", "coingecko:lastupdate",
                      int(time.time())), int(time.time()))
 
