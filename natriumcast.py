@@ -350,7 +350,11 @@ async def handle_user_message(r : web.Request, message : str, ws : web.WebSocket
                     subtype = None
                     if 'subtype' in request_json:
                         subtype = request_json['subtype']
-                    reply = await rpc.process_defer(r, uid, json.loads(request_json['block']), do_work, subtype=subtype)
+                    if 'json_block' in request_json and request_json['json_block']:
+                        sblock = request_json['block']
+                    else:
+                        sblock = json.loads(request_json['block'])
+                    reply = await rpc.process_defer(r, uid, sblock, do_work, subtype=subtype)
                     if reply is None:
                         raise Exception
                     ret = json.dumps(reply)
