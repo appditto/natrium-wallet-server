@@ -31,8 +31,8 @@ class RPC:
                         log.server_logger.error('Received status code %d from request %s', resp.status, json.dumps(request_json))
                         raise Exception
                     return await resp.json(content_type=None)
-        except Exception:
-            log.server_logger.exception()
+        except Exception as e:
+            log.server_logger.exception(e)
             return None
 
     async def get_pending_count(self, r : web.Request, account : str, uid : str = '0') -> int:
@@ -179,8 +179,8 @@ class RPC:
                 })
             r.app['active_work'].remove(request_json['hash'])
             return response
-        except Exception:
-            log.server_logger.exception()
+        except Exception as e:
+            log.server_logger.exception(e)
             r.app['active_work'].remove(request_json['hash'])
             return None
 
