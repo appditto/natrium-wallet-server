@@ -10,3 +10,4 @@ uvloop
 python-socketio
 websockets
 python-rapidjson
+aiohttp_cors

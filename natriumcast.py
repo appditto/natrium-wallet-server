@@ -18,6 +18,7 @@ from logging.handlers import TimedRotatingFileHandler, WatchedFileHandler
 import aiofcm
 import aioredis
 from aiohttp import ClientSession, WSMessage, WSMsgType, log, web
+import aiohttp_cors
 
 from rpc import RPC, allowed_rpc_actions
 from util import Util
@@ -633,9 +634,18 @@ async def init_app():
             root.addHandler(TimedRotatingFileHandler(log_file, when="d", interval=1, backupCount=100))        
 
     app = web.Application()
+    cors = aiohttp_cors.setup(app, defaults={
+        "*": aiohttp_cors.ResourceOptions(
+                allow_credentials=True,
+                expose_headers="*",
+                allow_headers="*",
+            )
+    })    
     app.add_routes([web.get('/', websocket_handler)]) # All WS requests
     app.add_routes([web.post('/callback', callback)]) # HTTP Callback from node
-    app.add_routes([web.post('/api', http_api)])      # HTTP API
+    # HTTP API
+    users_resource = cors.add(app.router.add_resource("/api"))
+    cors.add(users_resource.add_route("POST", http_api))    
     #app.add_routes([web.post('/callback', callback)])
     app.on_startup.append(open_redis)
     app.on_shutdown.append(close_redis)
