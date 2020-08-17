@@ -249,9 +249,11 @@ class RPC:
                     workbase = self.util.pubkey(block['account'])
                 else:
                     workbase = block['previous']
+                difficulty = 'fffffe0000000000' if self.banano_mode else 'fffffe0000000000' if subtype == 'receive' else 'fffffff800000000'
                 work_response = await self.work_request({
                     'action': 'work_generate',
-                    'hash': workbase
+                    'hash': workbase,
+                    'difficulty': difficulty
                 })
                 if work_response is None or 'work' not in work_response:
                     return {
