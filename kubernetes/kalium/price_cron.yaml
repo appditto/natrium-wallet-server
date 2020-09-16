@@ -1,0 +1,22 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: kalium-prices
+  namespace: kalium
+spec:
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: boompow
+            image: replaceme
+            command: ["/bin/bash", "-c"]
+            args: ["python prices.py"]
+            env:
+              - name: REDIS_HOST
+                value: redis-0.redis
+              - name: REDIS_DB
+                value: "10"
+          restartPolicy: OnFailure

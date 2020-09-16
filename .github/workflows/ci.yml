@@ -43,7 +43,7 @@ jobs:
           kustomize-version: "3.5.4"
 
       - name: Set image
-        working-directory: ./kubernetes
+        working-directory: ./kubernetes/natrium
         run: |
           kustomize edit set image replaceme=appditto/natrium-server:${BRANCH_NAME}-${{ env.GITHUB_RUN_ID }}
           kustomize build . > deployment-k.yaml
@@ -53,5 +53,5 @@ jobs:
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
         with:
-          args: apply -f ./kubernetes/deployment-k.yaml
+          args: apply -f ./kubernetes/natrium/deployment-k.yaml
       

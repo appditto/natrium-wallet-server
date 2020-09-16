@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kalium-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: kalium-server
+  template:
+    metadata:
+      labels:
+        app: kalium-server
+    spec:
+      containers:
+      - name: kalium-server
+        image: replaceme
+        resources:
+          requests:
+            cpu: 250m
+            memory: 500Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        ports:
+        - containerPort: 5076
+          name: api
+        command: ["/bin/bash", "-c"]
+        args: ["python natriumcast.py --host 0.0.0.0 --log-to-stdout --websocket-url ws://banano-node.banano:7074 --banano"]
+        env:
+          - name: REDIS_HOST
+            value: redis-0.redis
+          - name: REDIS_DB
+            value: "15"
+          - name: WORK_URL
+            value: http://betsy-banano.betsy:5555
+          - name: DEBUG
+            value: "0"
+          - name: RPC_URL
+            value: http://banano-node.banano:7072
+          - name: FCM_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: kalium
+                key: fcm_api_key
+          - name: FCM_SENDER_ID
+            valueFrom:
+              secretKeyRef:
+                name: kalium
+                key: fcm_sender

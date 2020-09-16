@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: kalium-server
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+        real_ip_header CF-Connecting-IP;
+    nginx.ingress.kubernetes.io/add-base-url: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/websocket-services: "kalium-server"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "1800"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
+    nginx.ingress.kubernetes.io/upstream-hash-by: $remote_addr
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-name: "kalium_socket"
+    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
+    nginx.ingress.kubernetes.io/server-snippet: |-
+      location /callback {
+          deny all;
+          return 404;
+      }
+spec:
+  tls:
+  - hosts:
+    - kaliumapi.appditto.com
+    secretName: kaliumapi-appditto-com-server-secret
+  rules:
+  - host: kaliumapi.appditto.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: kalium-server
+          servicePort: 5076
