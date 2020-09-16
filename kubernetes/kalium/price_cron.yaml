@@ -13,7 +13,7 @@ spec:
           - name: boompow
             image: replaceme
             command: ["/bin/bash", "-c"]
-            args: ["python prices.py"]
+            args: ["python prices_banano.py"]
             env:
               - name: REDIS_HOST
                 value: redis-0.redis
