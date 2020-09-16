@@ -18,5 +18,5 @@ spec:
               - name: REDIS_HOST
                 value: redis-0.redis
               - name: REDIS_DB
-                value: "10"
+                value: "15"
           restartPolicy: OnFailure
