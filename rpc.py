@@ -32,7 +32,7 @@ class RPC:
                         raise Exception
                     return await resp.json(content_type=None)
         except Exception:
-            log.server_logger.exception()
+            log.server_logger.exception("exception in json_post")
             return None
 
     async def get_pending_count(self, r : web.Request, account : str, uid : str = '0') -> int:
@@ -180,7 +180,7 @@ class RPC:
             r.app['active_work'].remove(request_json['hash'])
             return response
         except Exception:
-            log.server_logger.exception()
+            log.server_logger.exception('in work defer')
             r.app['active_work'].remove(request_json['hash'])
             return None
 
