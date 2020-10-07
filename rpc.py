@@ -253,7 +253,8 @@ class RPC:
                 work_response = await self.work_request({
                     'action': 'work_generate',
                     'hash': workbase,
-                    'difficulty': difficulty
+                    'difficulty': difficulty,
+                    'reward': False
                 })
                 if work_response is None or 'work' not in work_response:
                     return {
