@@ -11,7 +11,6 @@ jobs:
     env:
       GITHUB_RUN_ID: ${{ github.run_id }}    
     steps:
-      - uses: nelonoel/branch-name@v1
       - uses: actions/checkout@master   
       - name: Login to registry
         uses: actions-hub/docker/login@master
@@ -19,15 +18,25 @@ jobs:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USER }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Get branch name (merge)
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> $GITHUB_ENV
+
+      - name: Get branch name (pull request)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_HEAD_REF} | tr / -)" >> $GITHUB_ENV
+
       - name: Build and tag
         if: success()
-        run: docker build -t appditto/natrium-server:${BRANCH_NAME}-${{ env.GITHUB_RUN_ID }} .
+        run: docker build -t appditto/natrium-server:${{ env.BRANCH_NAME }}-${{ env.GITHUB_RUN_ID }} .
 
       - name: Push image   
         if: success()
         uses: actions-hub/docker@master
         with:
-          args: push appditto/natrium-server:${BRANCH_NAME}-${{ env.GITHUB_RUN_ID }}
+          args: push appditto/natrium-server:${{ env.BRANCH_NAME }}-${{ env.GITHUB_RUN_ID }}
 
   deploy:
     name: Deploy natrium server
@@ -36,16 +45,25 @@ jobs:
     env:
       GITHUB_RUN_ID: ${{ github.run_id }}
     steps:
-      - uses: nelonoel/branch-name@v1
       - uses: actions/checkout@master   
       - uses: imranismail/setup-kustomize@v1
         with:
           kustomize-version: "3.5.4"
 
+      - name: Get branch name (merge)
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> $GITHUB_ENV
+
+      - name: Get branch name (pull request)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_HEAD_REF} | tr / -)" >> $GITHUB_ENV
+
       - name: Set image
         working-directory: ./kubernetes/natrium
         run: |
-          kustomize edit set image replaceme=appditto/natrium-server:${BRANCH_NAME}-${{ env.GITHUB_RUN_ID }}
+          kustomize edit set image replaceme=appditto/natrium-server:${{ env.BRANCH_NAME }}-${{ env.GITHUB_RUN_ID }}
           kustomize build . > deployment-k.yaml
 
       - name: Deploy image to k8s cluster
@@ -62,16 +80,25 @@ jobs:
     env:
       GITHUB_RUN_ID: ${{ github.run_id }}
     steps:
-      - uses: nelonoel/branch-name@v1
       - uses: actions/checkout@master   
       - uses: imranismail/setup-kustomize@v1
         with:
           kustomize-version: "3.5.4"
 
+      - name: Get branch name (merge)
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> $GITHUB_ENV
+
+      - name: Get branch name (pull request)
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_HEAD_REF} | tr / -)" >> $GITHUB_ENV
+
       - name: Set image
         working-directory: ./kubernetes/kalium
         run: |
-          kustomize edit set image replaceme=appditto/natrium-server:${BRANCH_NAME}-${{ env.GITHUB_RUN_ID }}
+          kustomize edit set image replaceme=appditto/natrium-server:${{ env.BRANCH_NAME }}-${{ env.GITHUB_RUN_ID }}
           kustomize build . > deployment-k.yaml
 
       - name: Deploy image to k8s cluster
