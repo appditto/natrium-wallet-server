@@ -18,7 +18,7 @@ spec:
         image: replaceme
         resources:
           requests:
-            cpu: 1000m
+            cpu: 100m
             memory: 200Mi
           limits:
             cpu: 500m
