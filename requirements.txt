@@ -7,7 +7,7 @@ aiofcm
 python-dotenv
 pylint
 uvloop
-python-socketio
+python-socketio==4.6.1
 websockets
 python-rapidjson
 aiohttp_cors
