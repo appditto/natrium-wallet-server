@@ -477,20 +477,21 @@ async def http_api(r: web.Request):
         return web.HTTPInternalServerError(reason=f"Something went wrong {str(sys.exc_info())}")
 
 async def callback_ws(app: web.Application, data: dict):
-    link = data['block']['link_as_account']
-    if app['subscriptions'].get(link):
-        log.server_logger.info("Pushing to clients %s", str(app['subscriptions'][link]))
-        for sub in app['subscriptions'][link]:
-            if sub in app['clients']:
-                if data['block']['subtype'] == 'send':
-                    data['is_send'] = 'true'
-                    await app['clients'][sub].send_str(json.dumps(data))
-    # Send to natrium donations page
-    if data['block']['subtype'] == 'send' and link == 'nano_1natrium1o3z5519ifou7xii8crpxpk8y65qmkih8e8bpsjri651oza8imdd':
-        log.server_logger.info('Detected send to natrium account')
-        if 'amount' in data:
-            log.server_logger.info(f'emitting donation event for amount: {data["amount"]}')
-            await sio.emit('donation_event', {'amount':data['amount']})
+    if 'block' in data and 'link_as_account' in data['block']:
+        link = data['block']['link_as_account']
+        if app['subscriptions'].get(link):
+            log.server_logger.info("Pushing to clients %s", str(app['subscriptions'][link]))
+            for sub in app['subscriptions'][link]:
+                if sub in app['clients']:
+                    if data['block']['subtype'] == 'send':
+                        data['is_send'] = 'true'
+                        await app['clients'][sub].send_str(json.dumps(data))
+        # Send to natrium donations page
+        if data['block']['subtype'] == 'send' and link == 'nano_1natrium1o3z5519ifou7xii8crpxpk8y65qmkih8e8bpsjri651oza8imdd':
+            log.server_logger.info('Detected send to natrium account')
+            if 'amount' in data:
+                log.server_logger.info(f'emitting donation event for amount: {data["amount"]}')
+                await sio.emit('donation_event', {'amount':data['amount']})
 
 async def callback(r : web.Request):
     try:
