@@ -23,7 +23,7 @@ class RPC:
         self.util = Util(banano_mode)
         self.price_prefix = price_prefix
 
-    async def json_post(self, request_json : dict, timeout : int = 30, is_work : bool = False) -> dict:
+    async def json_post(self, request_json : dict, timeout : int = 90, is_work : bool = False) -> dict:
         try:
             async with ClientSession() as session:
                 async with session.post(self.work_url if is_work and self.work_url is not None else self.node_url, json=request_json, timeout=timeout) as resp:
