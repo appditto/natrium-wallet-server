@@ -249,13 +249,20 @@ class RPC:
                     workbase = self.util.pubkey(block['account'])
                 else:
                     workbase = block['previous']
-                difficulty = 'fffffe0000000000' if self.banano_mode else 'ffffffc000000000' if subtype == 'receive' else 'fffffff800000000'
-                work_response = await self.work_request({
-                    'action': 'work_generate',
-                    'hash': workbase,
-                    'difficulty': difficulty,
-                    'reward': False
-                })
+                if self.banano_mode:
+                    difficulty = 'fffffe0000000000'
+                    work_response = await self.work_request({
+                        'action': 'work_generate',
+                        'hash': workbase,
+                        'difficulty': difficulty,
+                        'reward': False
+                    })
+                else:
+                    work_response = await self.work_request({
+                        'action': 'work_generate',
+                        'hash': workbase,
+                        'subtype': subtype
+                    })                    
                 if work_response is None or 'work' not in work_response:
                     return {
                         'error':'failed work_generate in process request'

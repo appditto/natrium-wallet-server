@@ -34,7 +34,7 @@ spec:
           - name: REDIS_DB
             value: "10"
           - name: WORK_URL
-            value: http://betsy-natrium.betsy:5555
+            value: http://pippin-nano.pippin:11338
           - name: DEBUG
             value: "0"
           - name: RPC_URL
