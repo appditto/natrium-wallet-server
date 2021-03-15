@@ -2,7 +2,6 @@ apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
   name: natrium-server
-  namespace: natrium
   annotations:
     kubernetes.io/ingress.class: "nginx"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
@@ -26,13 +25,13 @@ metadata:
 spec:
   tls:
   - hosts:
-    - app.natrium.io
-    secretName: app-natrium-io-server-secret
+    - testapp.natrium.io
+    secretName: testapp-natrium-io-server-secret
   rules:
-  - host: app.natrium.io
+  - host: testapp.natrium.io
     http:
       paths:
       - path: /
         backend:
           serviceName: natrium-server
-          servicePort: 5076
+          servicePort: 3000

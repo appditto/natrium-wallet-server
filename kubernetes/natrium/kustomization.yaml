@@ -1,9 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: natrium
+namespace: natrium-test
 resources:
 - deployment.yaml
 - ingress.yaml
 - svc.yaml
-- price_cron.yaml
-- vesprice_cron.yaml

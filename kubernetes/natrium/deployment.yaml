@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: natrium-server
-  namespace: natrium
 spec:
   replicas: 2
   selector:
@@ -24,28 +23,5 @@ spec:
             cpu: 500m
             memory: 1Gi
         ports:
-        - containerPort: 5076
+        - containerPort: 3000
           name: api
-        command: ["/bin/bash", "-c"]
-        args: ["python natriumcast.py --host 0.0.0.0 --log-to-stdout --websocket-url ws://10.98.0.6:7078"]
-        env:
-          - name: REDIS_HOST
-            value: redis-0.redis
-          - name: REDIS_DB
-            value: "10"
-          - name: WORK_URL
-            value: http://pippin-nano.pippin:11338
-          - name: DEBUG
-            value: "0"
-          - name: RPC_URL
-            value: http://10.98.0.6:7076
-          - name: FCM_API_KEY
-            valueFrom:
-              secretKeyRef:
-                name: natrium
-                key: fcm_api_key
-          - name: FCM_SENDER_ID
-            valueFrom:
-              secretKeyRef:
-                name: natrium
-                key: fcm_sender
