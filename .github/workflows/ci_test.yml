@@ -63,7 +63,7 @@ jobs:
       - name: Set image
         working-directory: ./kubernetes/natrium
         run: |
-          kustomize edit set image replaceme=appditto/natrium-server:${{ env.BRANCH_NAME }}-${{ env.GITHUB_RUN_ID }}
+          kustomize edit set image replaceme=appditto/natrium-server-rewrite:${{ env.BRANCH_NAME }}-${{ env.GITHUB_RUN_ID }}
           kustomize build . > deployment-k.yaml
 
       - name: Deploy image to k8s cluster
