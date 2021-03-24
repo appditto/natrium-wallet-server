@@ -41,7 +41,8 @@ class RPC:
             "action":"pending",
             "account":account,
             "threshold":str(10**24) if not self.banano_mode else str(10**27),
-            "count":51
+            "count":51,
+            "include_only_confirmed": True
         }
         log.server_logger.info('sending get_pending_count; %s; %s', self.util.get_request_ip(r), uid)
         response = await self.json_post(message)
