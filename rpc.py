@@ -290,6 +290,8 @@ class RPC:
     # most valuable to least valuable. Finally, to save the client processing burden and give the server room to breathe,
     # we return only the top 10.
     async def pending_defer(self, r : web.Request, uid : str, request : dict) -> dict:
+        if 'include_only_confirmed' not in request:
+            request['include_only_confirmed'] = True
         response = await self.json_post(request)
 
         if response is None:
