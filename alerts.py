@@ -28,6 +28,7 @@ def get_active_alert(lang: str):
       return [{
         "id": a["id"],
         "priority": a["priority"],
+        "active":a["active"],
         "title": a[lang]["title"],
         "short_description": a[lang]["short_description"],
         "long_description": a[lang]["long_description"],
