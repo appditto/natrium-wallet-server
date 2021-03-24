@@ -23,6 +23,7 @@ import aiohttp_cors
 from rpc import RPC, allowed_rpc_actions
 from util import Util
 from nano_websocket import WebsocketClient
+from alerts import get_active_alert
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
@@ -476,6 +477,9 @@ async def http_api(r: web.Request):
         log.server_logger.exception("received exception in http_api")
         return web.HTTPInternalServerError(reason=f"Something went wrong {str(sys.exc_info())}")
 
+async def alerts_api(r: web.Request):
+    return web.json_response(data=get_active_alert(r.match_info["lang"]))
+
 async def callback_ws(app: web.Application, data: dict):   
     if 'block' in data and 'link_as_account' in data['block']:
         link = data['block']['link_as_account']
@@ -647,6 +651,8 @@ async def init_app():
     # HTTP API
     users_resource = cors.add(app.router.add_resource("/api"))
     cors.add(users_resource.add_route("POST", http_api))    
+    alerts_resource = cors.add(app.router.add_resource("/alerts/{lang}"))
+    cors.add(alerts_resource.add_route("GET", alerts_api))
     #app.add_routes([web.post('/callback', callback)])
     app.on_startup.append(open_redis)
     app.on_shutdown.append(close_redis)
