@@ -9,6 +9,8 @@ import (
 )
 
 func HandleWSMessage(c *websocket.Conn) {
+	ipAddr := c.Locals("ip")
+
 	var (
 		mt  int
 		msg []byte
@@ -43,7 +45,15 @@ func HandleWSMessage(c *websocket.Conn) {
 				continue
 			}
 			// Handle subscribe
-			glog.Infof("Received account_subscribe: %s, %s, %s, %s", subscribeRequest.Account, subscribeRequest.Currency, subscribeRequest.FcmToken, subscribeRequest.NotificationEnabled)
+			// New subscription (no UUID)
+			if subscribeRequest.Uuid == nil {
+				glog.Infof("Received account_subscribe: %s, %s", subscribeRequest.Account, ipAddr)
+				// Get curency
+
+				// Call "rpc" subscribe
+
+				// Update fcm token or delete based on notifications_enable
+			}
 		} else {
 			// Unknown request via websocket
 			glog.Errorf("Unknown action sent via websocket %s", baseRequest.Action)

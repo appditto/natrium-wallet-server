@@ -36,6 +36,18 @@ func main() {
 	// Websocket upgrade
 	// HTTP/WS Routes
 	app.Use("/", func(c *fiber.Ctx) error {
+		// Get IP Address
+		headers := c.GetReqHeaders()
+		var ipAddr string
+		if val, ok := headers["X-Real-Ip"]; ok {
+			ipAddr = val
+		} else if val, ok := headers["X-Forwarded-For"]; ok {
+			ipAddr = val
+		} else {
+			ipAddr = c.IP()
+		}
+
+		c.Locals("ip", ipAddr)
 		// IsWebSocketUpgrade returns true if the client
 		// requested upgrade to the WebSocket protocol.
 		if websocket.IsWebSocketUpgrade(c) {

@@ -1,4 +1,4 @@
-FROM golang:1.15.8 AS builder
+FROM golang:1.19.0 AS builder
 
 # Set environment
 ENV CGO_ENABLED=1
