@@ -7,9 +7,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/golang/glog"
 	guuid "github.com/google/uuid"
 	"github.com/recws-org/recws"
+	"k8s.io/klog/v2"
 )
 
 type wsSubscribe struct {
@@ -62,12 +62,12 @@ func StartNanoWSClient(wsUrl string, account string, callback func(data Confirma
 			return
 		case <-ctx.Done():
 			go ws.Close()
-			glog.Infof("Websocket closed %s", ws.GetURL())
+			klog.Infof("Websocket closed %s", ws.GetURL())
 			return
 		default:
 			if !ws.IsConnected() {
 				sentSubscribe = false
-				glog.Infof("Websocket disconnected %s", ws.GetURL())
+				klog.Infof("Websocket disconnected %s", ws.GetURL())
 				time.Sleep(2 * time.Second)
 				continue
 			}
@@ -75,7 +75,7 @@ func StartNanoWSClient(wsUrl string, account string, callback func(data Confirma
 			// Sent subscribe with ack
 			if !sentSubscribe {
 				if err := ws.WriteJSON(subRequest); err != nil {
-					glog.Infof("Error sending subscribe request %s", ws.GetURL())
+					klog.Infof("Error sending subscribe request %s", ws.GetURL())
 					time.Sleep(2 * time.Second)
 					continue
 				} else {
@@ -86,14 +86,14 @@ func StartNanoWSClient(wsUrl string, account string, callback func(data Confirma
 			var confMessage ConfirmationResponse
 			err := ws.ReadJSON(&confMessage)
 			if err != nil {
-				glog.Infof("Error: ReadJSON %s", ws.GetURL())
+				klog.Infof("Error: ReadJSON %s", ws.GetURL())
 				sentSubscribe = false
 				continue
 			}
 
 			// Trigger callback
 			callback(confMessage)
-			glog.Infof("Received callback WS hash %s", confMessage.Message["hash"])
+			klog.Infof("Received callback WS hash %s", confMessage.Message["hash"])
 		}
 	}
 }

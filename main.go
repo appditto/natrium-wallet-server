@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/appditto/natrium-wallet-server/controller"
+	"github.com/appditto/natrium-wallet-server/net"
+	"github.com/appditto/natrium-wallet-server/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/websocket/v2"
@@ -28,6 +30,15 @@ func init() {
 func main() {
 	// Create app
 	app := fiber.New()
+
+	// Setup RPC Client
+	nanoRpcUrl := utils.GetEnv("NANO_RPC_URL", "http://localhost:7076")
+	rpcClient := net.RPCClient{
+		Url: nanoRpcUrl,
+	}
+
+	// Setup controllers
+	wsc := controller.WsController{RPCClient: &rpcClient}
 
 	// HTTP Routes
 	app.Post("/api", controller.HandleAction)
@@ -56,7 +67,8 @@ func main() {
 		}
 		return fiber.ErrUpgradeRequired
 	})
-	app.Get("/", websocket.New(controller.HandleWSMessage))
+
+	app.Get("/", websocket.New(wsc.HandleWSMessage))
 
 	// Cors middleware
 	app.Use(cors.New())

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"text/tabwriter"
 
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 // AssertEqual checks if values are equal
@@ -55,7 +55,7 @@ func AssertEqual(t testing.TB, expected, actual interface{}, description ...stri
 	if t != nil {
 		t.Fatal(result)
 	} else {
-		glog.Fatal(result)
+		klog.Fatal(result)
 	}
 }
 
@@ -102,6 +102,6 @@ func AssertNotEqual(t testing.TB, expected, actual interface{}, description ...s
 	if t != nil {
 		t.Fatal(result)
 	} else {
-		glog.Fatal(result)
+		klog.Fatal(result)
 	}
 }
