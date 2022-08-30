@@ -203,42 +203,6 @@ func (wc *WsController) HandleWSMessage(c *websocket.Conn) {
 					}
 				}
 			}
-		} else if baseRequest.Action == "account_history" {
-			// Retrieve account history
-			var accountHistory models.AccountHistory
-			if err = json.Unmarshal(msg, &accountHistory); err != nil {
-				errJson, _ := json.Marshal(models.INVALID_REQUEST_ERR)
-				if err = c.WriteMessage(mt, errJson); err != nil {
-					klog.Errorf("write: %s", err)
-					break
-				}
-				continue
-			}
-			// Check if account is valid
-			if !utils.ValidateAddress(accountHistory.Account, wc.BananoMode) {
-				c.WriteMessage(mt, []byte("{\"error\":\"Invalid account\"}"))
-				continue
-			}
-			// Limit the maximum count
-			if accountHistory.Count != nil && *accountHistory.Count > 3500 {
-				*accountHistory.Count = 3500
-			}
-			// Post request as-is to node
-			response, err := wc.RPCClient.MakeRequest(accountHistory)
-			if err != nil {
-				klog.Errorf("Error making account history request %s", err)
-				c.WriteMessage(mt, []byte("{\"error\":\"error calling acount_history\"}"))
-				continue
-			}
-			var responseMap map[string]interface{}
-			err = json.Unmarshal(response, &responseMap)
-			if err != nil {
-				klog.Errorf("Error unmarshalling account history response %s", err)
-				c.WriteMessage(mt, []byte("{\"error\":\"error calling acount_history\"}"))
-				continue
-			}
-			// Check that it's ok
-			c.WriteJSON(responseMap)
 		} else {
 			// Unknown request via websocket
 			klog.Errorf("Unknown action sent via websocket %s", baseRequest.Action)

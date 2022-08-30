@@ -100,26 +100,17 @@ func main() {
 	}
 	wsClientMap := controller.NewWSSubscriptions()
 	wsc := controller.WsController{RPCClient: &rpcClient, PricePrefix: pricePrefix, WSClientMap: wsClientMap, BananoMode: *bananoMode, DB: db}
+	hc := controller.HttpController{RPCClient: &rpcClient, BananoMode: *bananoMode}
 
 	// HTTP Routes
-	app.Post("/api", controller.HandleAction)
+	app.Post("/api", hc.HandleAction)
 	app.Post("/callback", controller.HandleHTTPCallback)
 
 	// Websocket upgrade
 	// HTTP/WS Routes
 	app.Use("/", func(c *fiber.Ctx) error {
 		// Get IP Address
-		headers := c.GetReqHeaders()
-		var ipAddr string
-		if val, ok := headers["X-Real-Ip"]; ok {
-			ipAddr = val
-		} else if val, ok := headers["X-Forwarded-For"]; ok {
-			ipAddr = val
-		} else {
-			ipAddr = c.IP()
-		}
-
-		c.Locals("ip", ipAddr)
+		c.Locals("ip", utils.IPAddress(c))
 		// IsWebSocketUpgrade returns true if the client
 		// requested upgrade to the WebSocket protocol.
 		if websocket.IsWebSocketUpgrade(c) {
