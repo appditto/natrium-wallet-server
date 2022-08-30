@@ -96,7 +96,7 @@ func main() {
 
 	// Setup FCM client
 	var fcmClient *fcm.Client
-	fcmToken := utils.GetEnv("FCM_TOKEN", "")
+	fcmToken := utils.GetEnv("FCM_API_KEY", "")
 	if fcmToken != "" {
 		svc, err := fcm.NewClient(fcmToken)
 		if err != nil {
