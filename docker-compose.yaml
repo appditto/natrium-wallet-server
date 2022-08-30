@@ -1,0 +1,59 @@
+version: '3.9'
+services:
+    redis:
+        container_name: natrium_redis
+        image: redis:7-alpine
+        restart: unless-stopped
+        networks: ['app-network']
+
+    db:
+        container_name: natrium_postgres
+        image: postgres:14
+        ports:
+            - '127.0.0.1:54323:5432'
+        restart: unless-stopped
+        environment:
+            - POSTGRES_DB=natrium
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=postgres
+            - PGDATA=/var/lib/postgresql/data/dev
+        volumes:
+            - .data/postgres:/var/lib/postgresql/data:delegated # Delegated indicates the containers view of the volume takes priority
+            - ./scripts/setup_test_db.sh:/docker-entrypoint-initdb.d/setup_test_db.sh
+        networks: ['app-network']
+
+    app:
+        container_name: natrium_dev
+        security_opt:
+            - "seccomp:unconfined"        
+        environment:
+            - DB_HOST=db
+            - DB_PORT=5432
+            - DB_USER=postgres
+            - DB_PASS=postgres
+            - DB_NAME=natrium
+            - DB_MOCK_HOST=db
+            - DB_MOCK_PORT=5432
+            - DB_MOCK_USER=postgres
+            - DB_MOCK_PASS=postgres
+            - DB_SSLMODE=disable
+            - DATABASE_URL=postgres://postgres:postgres@db:5432/natrium
+            - REDIS_HOST=redis
+            - GOPRIVATE=github.com/appditto
+            - RPC_URL=https://app.natrium.io/api
+        ports:
+            - '127.0.0.1:3003:3000'
+        build:
+            context: .
+            dockerfile: Dockerfile.dev
+        volumes:
+            - $PWD:/app:cached
+        restart: on-failure
+        entrypoint: /bin/zsh
+        stdin_open: true
+        tty: true
+        networks: ['app-network']
+
+networks:
+    app-network:
+        driver: bridge

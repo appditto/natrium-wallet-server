@@ -9,6 +9,7 @@ import (
 type WSClient struct {
 	id       uuid.UUID
 	accounts []string // Subscribed accounts
+	currency string
 }
 
 type WSClientMap struct {
@@ -71,6 +72,14 @@ func (r *WSClientMap) AddAccount(id uuid.UUID, account string) {
 				r.subscriptions[i].accounts = append(r.subscriptions[i].accounts, account)
 			}
 		}
+	}
+}
+
+func (r *WSClientMap) UpdateCurrency(id uuid.UUID, currency string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.exists(id) {
+		r.subscriptions[r.indexOf(id)].currency = currency
 	}
 }
 

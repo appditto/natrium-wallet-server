@@ -2,9 +2,11 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/appditto/natrium-wallet-server/controller"
+	"github.com/appditto/natrium-wallet-server/database"
 	"github.com/appditto/natrium-wallet-server/net"
 	"github.com/appditto/natrium-wallet-server/utils"
 	"github.com/gofiber/fiber/v2"
@@ -64,6 +66,24 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Setup database conn
+	config := &database.Config{
+		Host:     os.Getenv("DB_HOST"),
+		Port:     os.Getenv("DB_PORT"),
+		Password: os.Getenv("DB_PASS"),
+		User:     os.Getenv("DB_USER"),
+		SSLMode:  os.Getenv("DB_SSLMODE"),
+		DBName:   os.Getenv("DB_NAME"),
+	}
+	fmt.Println("🏡 Connecting to database...")
+	db, err := database.NewConnection(config)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("🦋 Running database migrations...")
+	database.Migrate(db)
+
 	// Create app
 	app := fiber.New()
 
@@ -79,7 +99,7 @@ func main() {
 		pricePrefix = "banano"
 	}
 	wsClientMap := controller.NewWSSubscriptions()
-	wsc := controller.WsController{RPCClient: &rpcClient, PricePrefix: pricePrefix, WSClientMap: wsClientMap, BananoMode: *bananoMode}
+	wsc := controller.WsController{RPCClient: &rpcClient, PricePrefix: pricePrefix, WSClientMap: wsClientMap, BananoMode: *bananoMode, DB: db}
 
 	// HTTP Routes
 	app.Post("/api", controller.HandleAction)
