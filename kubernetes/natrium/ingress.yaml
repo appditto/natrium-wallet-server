@@ -1,4 +1,4 @@
-apiVersion: networking.k8s.io/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: natrium-server
@@ -32,6 +32,9 @@ spec:
     http:
       paths:
       - path: /
+        pathType: Prefix
         backend:
-          serviceName: natrium-server
-          servicePort: 3000
+          server:
+            name: natrium-server
+            port:
+              number: 3000
