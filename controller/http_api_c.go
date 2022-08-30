@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strconv"
 
 	"github.com/appditto/natrium-wallet-server/models"
 	"github.com/appditto/natrium-wallet-server/models/dbmodels"
@@ -101,8 +102,6 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).SendString("ok")
 	}
 
-	klog.V(3).Infof("Sending push notification for block if applicable %s", callback.Hash)
-
 	// Get previous block
 	previous, err := hc.RPCClient.MakeBlockRequest(callbackBlock.Previous)
 	if err != nil {
@@ -161,7 +160,7 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 				klog.Errorf("Error converting raw to banano %s", err)
 				return c.Status(fiber.StatusOK).SendString("ok")
 			}
-			notificationTitle = fmt.Sprintf("Received %f BANANO", asBan)
+			notificationTitle = fmt.Sprintf("Received %s BANANO", strconv.FormatFloat(asBan, 'f', -1, 64))
 		} else {
 			appName = "Natrium"
 			asBan, err := utils.RawToNano(sendAmount.String(), true)
@@ -169,7 +168,7 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 				klog.Errorf("Error converting raw to nano %s", err)
 				return c.Status(fiber.StatusOK).SendString("ok")
 			}
-			notificationTitle = fmt.Sprintf("Received %f NANO", asBan)
+			notificationTitle = fmt.Sprintf("Received %s Nano", strconv.FormatFloat(asBan, 'f', -1, 64))
 		}
 		notificationBody := fmt.Sprintf("Open %s to receive this transaction.", appName)
 
@@ -191,7 +190,6 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 					Sound: "default",
 				},
 			}
-			klog.V(3).Infof("Sending notification to %s", token.FcmToken)
 			_, err := hc.FcmClient.Send(msg)
 			if err != nil {
 				klog.Errorf("Error sending notification %s", err)
