@@ -53,7 +53,7 @@ spec:
               secretKeyRef:
                 name: natrium
                 key: db_password 
-          - nsmr: FCM_API_KEY
+          - name: FCM_API_KEY
             valueFrom:
               secretKeyRef:
                 name: natrium
