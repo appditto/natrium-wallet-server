@@ -51,6 +51,39 @@ func (client *RPCClient) MakeAccountInfoRequest(account string) (map[string]inte
 		klog.Errorf("Error unmarshalling response %s", err)
 		return nil, err
 	}
+	// Check that it's ok
+	if _, ok := responseMap["frontier"]; !ok {
+		klog.Errorf("Error in account_info response %s", err)
+		return nil, err
+	}
 
 	return responseMap, nil
+}
+
+// This returns how many pending blocks an account has, up to 51, for anti-spam measures
+func (client *RPCClient) GetReceivableCount(account string, bananoMode bool) (int, error) {
+	threshold := "1000000000000000000000000"
+	if bananoMode {
+		threshold = "1000000000000000000000000000"
+	}
+	request := models.ReceivableRequest{
+		Action:               "receivable",
+		Account:              account,
+		Threshold:            threshold,
+		Count:                51,
+		IncludeOnlyConfirmed: true,
+	}
+	response, err := client.makeRequest(request)
+	if err != nil {
+		klog.Errorf("Error making request %s", err)
+		return 0, err
+	}
+	var parsed models.ReceivableResponse
+	err = json.Unmarshal(response, &parsed)
+	if err != nil {
+		klog.Errorf("Error unmarshalling response %s", err)
+		return 0, err
+	}
+
+	return len(parsed.Blocks), nil
 }

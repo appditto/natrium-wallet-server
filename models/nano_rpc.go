@@ -8,4 +8,15 @@ type AccountInfoAction struct {
 	Representative bool   `json:"representative"`
 }
 
+type ReceivableRequest struct {
+	Action               string `json:"action"`
+	Account              string `json:"account"`
+	Threshold            string `json:"threshold"`
+	Count                int    `json:"count"`
+	IncludeOnlyConfirmed bool   `json:"include_only_confirmed"`
+}
+
 // Responses
+type ReceivableResponse struct {
+	Blocks []string `json:"blocks"`
+}

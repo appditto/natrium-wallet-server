@@ -32,6 +32,7 @@ func main() {
 	bolivarPriceUpdate := flag.Bool("bolivar-price-update", false, "Update bolivar price")
 	nanoPriceUpdate := flag.Bool("nano-price-update", false, "Update nano prices")
 	bananoPriceUpdate := flag.Bool("banano-price-update", false, "Update banano prices")
+	bananoMode := flag.Bool("banano", false, "Run in BANANO mode (Kalium)")
 	flag.Parse()
 
 	// Price job
@@ -67,13 +68,18 @@ func main() {
 	app := fiber.New()
 
 	// Setup RPC Client
-	nanoRpcUrl := utils.GetEnv("NANO_RPC_URL", "http://localhost:7076")
+	nanoRpcUrl := utils.GetEnv("RPC_URL", "http://localhost:7076")
 	rpcClient := net.RPCClient{
 		Url: nanoRpcUrl,
 	}
 
 	// Setup controllers
-	wsc := controller.WsController{RPCClient: &rpcClient}
+	pricePrefix := "nano"
+	if *bananoMode {
+		pricePrefix = "banano"
+	}
+	wsClientMap := controller.NewWSSubscriptions()
+	wsc := controller.WsController{RPCClient: &rpcClient, PricePrefix: pricePrefix, WSClientMap: wsClientMap, BananoMode: *bananoMode}
 
 	// HTTP Routes
 	app.Post("/api", controller.HandleAction)
