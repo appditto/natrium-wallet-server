@@ -25,3 +25,6 @@ spec:
         ports:
         - containerPort: 3000
           name: api
+        env:
+          - name: RPC_URL
+            value: http://10.8.0.2:7076
