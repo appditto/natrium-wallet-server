@@ -8,6 +8,6 @@ type CallbackBlock struct {
 }
 
 type Callback struct {
-	Hash  string `json:"hash"`
-	Block CallbackBlock
+	Hash  string        `json:"hash"`
+	Block CallbackBlock `json:"block"`
 }
