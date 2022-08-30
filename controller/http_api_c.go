@@ -135,10 +135,14 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 		// See if we have any tokens for this account
 		var tokens []dbmodels.FcmToken
 		if err := hc.DB.Where("account = ?", callbackBlock.LinkAsAccount).Find(&tokens).Error; err != nil {
+			// ! Debug
+			klog.Errorf("Error finding tokens %s", err)
 			// No tokens
 			return c.Status(fiber.StatusOK).SendString("ok")
 		}
 		if len(tokens) == 0 {
+			// ! DEBUG
+			klog.Errorf("No tokens found for account %s", callbackBlock.LinkAsAccount)
 			// No tokens
 			return c.Status(fiber.StatusOK).SendString("ok")
 		}
@@ -165,6 +169,8 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 		}
 		notificationBody := fmt.Sprintf("Open %s to receive this transaction.", appName)
 
+		klog.Infof("Prepared to send %s:%s", notificationTitle, notificationBody)
+
 		for _, token := range tokens {
 			// Create the message to be sent.
 			msg := &fcm.Message{
@@ -181,6 +187,7 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 					Sound: "default",
 				},
 			}
+			klog.Infof("Sending notification to %s", token.FcmToken)
 			hc.FcmClient.Send(msg)
 		}
 	}
