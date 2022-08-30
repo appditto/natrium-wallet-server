@@ -141,7 +141,7 @@ func (wc *WsController) HandleWSMessage(c *websocket.Conn) {
 			errJson, _ := json.Marshal(models.INVALID_REQUEST_ERR)
 			if err = c.WriteMessage(mt, errJson); err != nil {
 				klog.Errorf("write: %s", err)
-				break
+				//break
 			}
 		}
 	}
