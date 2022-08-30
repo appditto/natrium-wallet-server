@@ -34,7 +34,7 @@ spec:
       - path: /
         pathType: Prefix
         backend:
-          server:
+          service:
             name: natrium-server
             port:
               number: 3000
