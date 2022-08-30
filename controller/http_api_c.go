@@ -2,18 +2,26 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
+	"math/big"
 
 	"github.com/appditto/natrium-wallet-server/models"
+	"github.com/appditto/natrium-wallet-server/models/dbmodels"
 	"github.com/appditto/natrium-wallet-server/net"
 	"github.com/appditto/natrium-wallet-server/utils"
+	"github.com/appleboy/go-fcm"
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/exp/slices"
+	"gorm.io/gorm"
 	"k8s.io/klog/v2"
 )
 
 type HttpController struct {
-	RPCClient  *net.RPCClient
-	BananoMode bool
+	RPCClient   *net.RPCClient
+	BananoMode  bool
+	WSClientMap *WSClientMap
+	DB          *gorm.DB
+	FcmClient   *fcm.Client
 }
 
 var supportedActions = []string{
@@ -74,6 +82,103 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusBadRequest).JSON(models.UNSUPPORTED_ACTION_ERR)
 }
 
-func HandleHTTPCallback(c *fiber.Ctx) error {
-	return nil
+func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
+	var callback models.Callback
+	if err := json.Unmarshal(c.Request().Body(), &callback); err != nil {
+		klog.Errorf("Error unmarshalling callback %s", err)
+		return c.Status(fiber.StatusOK).SendString("ok")
+	}
+
+	// Supports push notificaiton
+	if hc.FcmClient == nil {
+		return c.Status(fiber.StatusOK).SendString("ok")
+	}
+
+	// Get previous block
+	previous, err := hc.RPCClient.MakeBlockRequest(callback.Block.Previous)
+	if err != nil {
+		klog.Errorf("Error making block request %s", err)
+		return c.Status(fiber.StatusOK).SendString("ok")
+	}
+
+	// ! TODO 	? not sure what the point of this is
+	// # See if this block was already pocketed
+	// cached_hash = await r.app['rdata'].get(f"link_{hash}")
+	// if cached_hash is not None:
+	// 		return web.HTTPOk()
+
+	minimumNotification := big.NewInt(0)
+	minimumNotification.SetString("1000000000000000000000000", 10)
+
+	curBalance := big.NewInt(0)
+	curBalance, ok := curBalance.SetString(callback.Block.Balance, 10)
+	if !ok {
+		klog.Error("Error settingcur balance")
+		return c.Status(fiber.StatusOK).SendString("ok")
+	}
+	prevBalance := big.NewInt(0)
+	prevBalance, ok = prevBalance.SetString(previous.Contents.Balance, 10)
+	if !ok {
+		klog.Error("Error setting prev balance")
+		return c.Status(fiber.StatusOK).SendString("ok")
+	}
+
+	// Delta
+	sendAmount := big.NewInt(0).Sub(prevBalance, curBalance)
+	if sendAmount.Cmp(minimumNotification) > 0 {
+		// Is a send we want to notify if we can
+		// See if we have any tokens for this account
+		var tokens []dbmodels.FcmToken
+		if err := hc.DB.Where("account = ?", callback.Block.LinkAsAccount).Find(&tokens).Error; err != nil {
+			// No tokens
+			return c.Status(fiber.StatusOK).SendString("ok")
+		}
+		if len(tokens) == 0 {
+			// No tokens
+			return c.Status(fiber.StatusOK).SendString("ok")
+		}
+
+		// We have tokens, make it happen
+		var notificationTitle string
+		var appName string
+		if hc.BananoMode {
+			appName = "Kalium"
+			asBan, err := utils.RawToBanano(sendAmount.String(), true)
+			if err != nil {
+				klog.Errorf("Error converting raw to banano %s", err)
+				return c.Status(fiber.StatusOK).SendString("ok")
+			}
+			notificationTitle = fmt.Sprintf("Received %f BANANO", asBan)
+		} else {
+			appName = "Natrium"
+			asBan, err := utils.RawToNano(sendAmount.String(), true)
+			if err != nil {
+				klog.Errorf("Error converting raw to nano %s", err)
+				return c.Status(fiber.StatusOK).SendString("ok")
+			}
+			notificationTitle = fmt.Sprintf("Received %f NANO", asBan)
+		}
+		notificationBody := fmt.Sprintf("Open %s to receive this transaction.", appName)
+
+		for _, token := range tokens {
+			// Create the message to be sent.
+			msg := &fcm.Message{
+				To:       token.FcmToken,
+				Priority: "high",
+				Data: map[string]interface{}{
+					"click_action": "FLUTTER_NOTIFICATION_CLICK",
+					"account":      callback.Block.LinkAsAccount,
+				},
+				Notification: &fcm.Notification{
+					Title: notificationTitle,
+					Body:  notificationBody,
+					Tag:   callback.Block.LinkAsAccount,
+					Sound: "default",
+				},
+			}
+			hc.FcmClient.Send(msg)
+		}
+	}
+
+	return c.Status(fiber.StatusOK).SendString("ok")
 }

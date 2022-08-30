@@ -87,3 +87,23 @@ func (client *RPCClient) GetReceivableCount(account string, bananoMode bool) (in
 
 	return len(parsed.Blocks), nil
 }
+
+func (client *RPCClient) MakeBlockRequest(hash string) (models.BlockResponse, error) {
+	request := models.BlockRequest{
+		Action:    "block_info",
+		Hash:      hash,
+		JsonBlock: true,
+	}
+	response, err := client.MakeRequest(request)
+	if err != nil {
+		klog.Errorf("Error making request %s", err)
+		return models.BlockResponse{}, err
+	}
+	var blockResponse models.BlockResponse
+	err = json.Unmarshal(response, &blockResponse)
+	if err != nil {
+		klog.Errorf("Error unmarshalling response %s", err)
+		return models.BlockResponse{}, err
+	}
+	return blockResponse, nil
+}

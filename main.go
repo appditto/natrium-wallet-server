@@ -9,6 +9,7 @@ import (
 	"github.com/appditto/natrium-wallet-server/database"
 	"github.com/appditto/natrium-wallet-server/net"
 	"github.com/appditto/natrium-wallet-server/utils"
+	"github.com/appleboy/go-fcm"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/websocket/v2"
@@ -93,6 +94,18 @@ func main() {
 		Url: nanoRpcUrl,
 	}
 
+	// Setup FCM client
+	var fcmClient *fcm.Client
+	fcmToken := utils.GetEnv("FCM_TOKEN", "")
+	if fcmToken != "" {
+		svc, err := fcm.NewClient(fcmToken)
+		if err != nil {
+			klog.Errorf("Error initating FCM client: %v", err)
+			os.Exit(1)
+		}
+		fcmClient = svc
+	}
+
 	// Setup controllers
 	pricePrefix := "nano"
 	if *bananoMode {
@@ -100,11 +113,11 @@ func main() {
 	}
 	wsClientMap := controller.NewWSSubscriptions()
 	wsc := controller.WsController{RPCClient: &rpcClient, PricePrefix: pricePrefix, WSClientMap: wsClientMap, BananoMode: *bananoMode, DB: db}
-	hc := controller.HttpController{RPCClient: &rpcClient, BananoMode: *bananoMode}
+	hc := controller.HttpController{RPCClient: &rpcClient, BananoMode: *bananoMode, DB: db, WSClientMap: wsClientMap, FcmClient: fcmClient}
 
 	// HTTP Routes
 	app.Post("/api", hc.HandleAction)
-	app.Post("/callback", controller.HandleHTTPCallback)
+	app.Post("/callback", hc.HandleHTTPCallback)
 
 	// Websocket upgrade
 	// HTTP/WS Routes
