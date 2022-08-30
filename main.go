@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/websocket/v2"
+	"k8s.io/klog/v2"
 )
 
 func usage() {
@@ -17,17 +18,51 @@ func usage() {
 	os.Exit(2)
 }
 
-func init() {
-	flag.Usage = usage
-	flag.Set("logtostderr", "true")
-	// TODO - this forces specific log levels, might not wanna do that
-	flag.Set("stderrthreshold", "INFO")
-	flag.Set("v", "2")
-	// This is wa
-	flag.Parse()
-}
-
 func main() {
+	// Server options
+	flag.Usage = usage
+	klog.InitFlags(nil)
+	flag.Set("logtostderr", "true")
+	flag.Set("stderrthreshold", "WARNING")
+	flag.Set("v", "2")
+	if utils.GetEnv("ENVIRONMENT", "development") == "development" {
+		flag.Set("stderrthreshold", "INFO")
+		flag.Set("v", "3")
+	}
+	bolivarPriceUpdate := flag.Bool("bolivar-price-update", false, "Update bolivar price")
+	nanoPriceUpdate := flag.Bool("nano-price-update", false, "Update nano prices")
+	bananoPriceUpdate := flag.Bool("banano-price-update", false, "Update banano prices")
+	flag.Parse()
+
+	// Price job
+	if *bolivarPriceUpdate {
+		err := net.UpdateDolarTodayPrice()
+		if err != nil {
+			klog.Errorf("Error updating dolar today price: %v", err)
+			os.Exit(1)
+		}
+		err = net.UpdateDolarSiPrice()
+		if err != nil {
+			klog.Errorf("Error updating dolar si price: %v", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	} else if *nanoPriceUpdate {
+		err := net.UpdateNanoCoingeckoPrices()
+		if err != nil {
+			klog.Errorf("Error updating nano prices: %v", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	} else if *bananoPriceUpdate {
+		err := net.UpdateBananoCoingeckoPrices()
+		if err != nil {
+			klog.Errorf("Error updating banano prices: %v", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	// Create app
 	app := fiber.New()
 
