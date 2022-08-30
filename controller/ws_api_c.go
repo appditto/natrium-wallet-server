@@ -39,7 +39,7 @@ func (wc *WsController) HandleWSMessage(c *websocket.Conn) {
 			klog.Error("read: %s", err)
 			break
 		}
-		klog.Infof("recv: %s", msg)
+		klog.V(3).Infof("recv: %s", msg)
 		// Determine type of message and unMarshal
 		var baseRequest models.BaseRequest
 		if err = json.Unmarshal(msg, &baseRequest); err != nil {

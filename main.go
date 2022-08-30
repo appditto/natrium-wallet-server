@@ -26,12 +26,12 @@ func main() {
 	flag.Usage = usage
 	klog.InitFlags(nil)
 	flag.Set("logtostderr", "true")
-	flag.Set("stderrthreshold", "WARNING")
-	flag.Set("v", "2")
-	if utils.GetEnv("ENVIRONMENT", "development") == "development" {
-		flag.Set("stderrthreshold", "INFO")
-		flag.Set("v", "3")
-	}
+	flag.Set("stderrthreshold", "INFO")
+	flag.Set("v", "3")
+	// if utils.GetEnv("ENVIRONMENT", "development") == "development" {
+	// 	flag.Set("stderrthreshold", "INFO")
+	// 	flag.Set("v", "3")
+	// }
 	bolivarPriceUpdate := flag.Bool("bolivar-price-update", false, "Update bolivar price")
 	nanoPriceUpdate := flag.Bool("nano-price-update", false, "Update nano prices")
 	bananoPriceUpdate := flag.Bool("banano-price-update", false, "Update banano prices")

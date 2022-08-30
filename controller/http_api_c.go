@@ -94,10 +94,14 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).SendString("ok")
 	}
 
+	klog.V(3).Infof("Received callback for block %s", callback.Hash)
+
 	// Supports push notificaiton
 	if hc.FcmClient == nil {
 		return c.Status(fiber.StatusOK).SendString("ok")
 	}
+
+	klog.V(3).Infof("Sending push notification for block if applicable %s", callback.Hash)
 
 	// Get previous block
 	previous, err := hc.RPCClient.MakeBlockRequest(callbackBlock.Previous)
@@ -169,7 +173,7 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 		}
 		notificationBody := fmt.Sprintf("Open %s to receive this transaction.", appName)
 
-		klog.Infof("Prepared to send %s:%s", notificationTitle, notificationBody)
+		klog.V(3).Infof("Prepared to send %s:%s", notificationTitle, notificationBody)
 
 		for _, token := range tokens {
 			// Create the message to be sent.
@@ -187,7 +191,7 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 					Sound: "default",
 				},
 			}
-			klog.Infof("Sending notification to %s", token.FcmToken)
+			klog.V(3).Infof("Sending notification to %s", token.FcmToken)
 			_, err := hc.FcmClient.Send(msg)
 			if err != nil {
 				klog.Errorf("Error sending notification %s", err)
