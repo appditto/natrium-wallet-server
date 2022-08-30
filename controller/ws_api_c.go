@@ -101,11 +101,11 @@ func (wc *WsController) HandleWSMessage(c *websocket.Conn) {
 				database.GetRedisDB().Hset("connected_clients", id.String(), currency)
 
 				// Get price info to include in response
-				priceCur, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("%s-%s", wc.PricePrefix, strings.ToLower(currency)))
+				priceCur, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-%s", wc.PricePrefix, strings.ToLower(currency)))
 				if err != nil {
 					klog.Errorf("Error getting price %v", err)
 				}
-				priceBtc, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("%s-btc", wc.PricePrefix))
+				priceBtc, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-btc", wc.PricePrefix))
 				if err != nil {
 					klog.Errorf("Error getting BTC price %v", err)
 				}
