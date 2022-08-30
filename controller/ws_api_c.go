@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/appditto/natrium-wallet-server/database"
 	"github.com/appditto/natrium-wallet-server/models"
@@ -150,11 +151,20 @@ func (wc *WsController) HandleWSMessage(c *websocket.Conn) {
 				wc.DB.Delete(&dbmodels.FcmToken{}, "fcm_token = ?", subscribeRequest.FcmToken)
 			} else {
 				// Add token to db if not exists
-				fcmToken := &dbmodels.FcmToken{
-					FcmToken: subscribeRequest.FcmToken,
-					Account:  subscribeRequest.Account,
+				var count int64
+				err = wc.DB.Model(&dbmodels.FcmToken{}).Where("fcm_token = ?", subscribeRequest.FcmToken).Where("account = ?", subscribeRequest.Account).Count(&count).Error
+				if err != nil || count == 0 {
+					fcmToken := &dbmodels.FcmToken{
+						FcmToken: subscribeRequest.FcmToken,
+						Account:  subscribeRequest.Account,
+					}
+					wc.DB.Create(fcmToken)
+				} else if count > 0 {
+					// Already exists so we will update updated_at
+					if err = wc.DB.Model(&dbmodels.FcmToken{}).Where("fcm_token = ?", subscribeRequest.FcmToken).Where("account = ?", subscribeRequest.Account).Update("updated_at", time.Now()).Error; err != nil {
+						klog.Errorf("Error updating fcm token updated_at %v", err)
+					}
 				}
-				wc.DB.Create(fcmToken)
 			}
 		} else if baseRequest.Action == "fcm_update" {
 			// Update FCM/notification preferences
@@ -178,11 +188,20 @@ func (wc *WsController) HandleWSMessage(c *websocket.Conn) {
 				wc.DB.Delete(&dbmodels.FcmToken{}, "fcm_token = ?", fcmUpdateRequest.FcmToken)
 			} else {
 				// Add token to db if not exists
-				fcmToken := &dbmodels.FcmToken{
-					FcmToken: fcmUpdateRequest.FcmToken,
-					Account:  fcmUpdateRequest.Account,
+				var count int64
+				err = wc.DB.Model(&dbmodels.FcmToken{}).Where("fcm_token = ?", fcmUpdateRequest.FcmToken).Where("account = ?", fcmUpdateRequest.Account).Count(&count).Error
+				if err != nil || count == 0 {
+					fcmToken := &dbmodels.FcmToken{
+						FcmToken: fcmUpdateRequest.FcmToken,
+						Account:  fcmUpdateRequest.Account,
+					}
+					wc.DB.Create(fcmToken)
+				} else if count > 0 {
+					// Already exists so we will update updated_at
+					if err = wc.DB.Model(&dbmodels.FcmToken{}).Where("fcm_token = ?", fcmUpdateRequest.FcmToken).Where("account = ?", fcmUpdateRequest.Account).Update("updated_at", time.Now()).Error; err != nil {
+						klog.Errorf("Error updating fcm token updated_at %v", err)
+					}
 				}
-				wc.DB.Create(fcmToken)
 			}
 		} else if baseRequest.Action == "account_history" {
 			// Retrieve account history

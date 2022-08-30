@@ -15,7 +15,7 @@ type RPCClient struct {
 }
 
 // Base request
-func (client *RPCClient) makeRequest(request interface{}) ([]byte, error) {
+func (client *RPCClient) MakeRequest(request interface{}) ([]byte, error) {
 	requestBody, _ := json.Marshal(request)
 	// HTTP post
 	resp, err := http.Post(client.Url, "application/json", bytes.NewBuffer(requestBody))
@@ -40,7 +40,7 @@ func (client *RPCClient) MakeAccountInfoRequest(account string) (map[string]inte
 		Pending:        true,
 		Representative: true,
 	}
-	response, err := client.makeRequest(request)
+	response, err := client.MakeRequest(request)
 	if err != nil {
 		klog.Errorf("Error making request %s", err)
 		return nil, err
@@ -73,7 +73,7 @@ func (client *RPCClient) GetReceivableCount(account string, bananoMode bool) (in
 		Count:                51,
 		IncludeOnlyConfirmed: true,
 	}
-	response, err := client.makeRequest(request)
+	response, err := client.MakeRequest(request)
 	if err != nil {
 		klog.Errorf("Error making request %s", err)
 		return 0, err
