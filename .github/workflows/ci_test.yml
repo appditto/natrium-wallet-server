@@ -12,11 +12,6 @@ jobs:
       GITHUB_RUN_ID: ${{ github.run_id }}    
     steps:
       - uses: actions/checkout@master   
-      - name: Login to registry
-        uses: actions-hub/docker/login@master
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USER }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Get branch name (merge)
         if: github.event_name != 'pull_request'
@@ -28,15 +23,22 @@ jobs:
         shell: bash
         run: echo "BRANCH_NAME=$(echo ${GITHUB_HEAD_REF} | tr / -)" >> $GITHUB_ENV
 
-      - name: Build and tag
+      - name: Login to registry
         if: success()
-        run: docker build -t appditto/natrium-server-rewrite:${{ env.BRANCH_NAME }}-${{ env.GITHUB_RUN_ID }} .
-
-      - name: Push image   
-        if: success()
-        uses: actions-hub/docker@master
+        uses: docker/login-action@v2
         with:
-          args: push appditto/natrium-server-rewrite:${{ env.BRANCH_NAME }}-${{ env.GITHUB_RUN_ID }}
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        if: success()
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          file: ./Dockerfile
+          tags: appditto/natrium-server-rewrite:${{ env.BRANCH_NAME }}-${{ env.GITHUB_RUN_ID }}
 
   deploy:
     name: Deploy natrium server
