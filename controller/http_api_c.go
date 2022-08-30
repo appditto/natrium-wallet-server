@@ -88,6 +88,11 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 		klog.Errorf("Error unmarshalling callback %s", err)
 		return c.Status(fiber.StatusOK).SendString("ok")
 	}
+	var callbackBlock models.CallbackBlock
+	if err := json.Unmarshal([]byte(callback.Block), &callbackBlock); err != nil {
+		klog.Errorf("Error unmarshalling callback block %s", err)
+		return c.Status(fiber.StatusOK).SendString("ok")
+	}
 
 	// Supports push notificaiton
 	if hc.FcmClient == nil {
@@ -95,7 +100,7 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 	}
 
 	// Get previous block
-	previous, err := hc.RPCClient.MakeBlockRequest(callback.Block.Previous)
+	previous, err := hc.RPCClient.MakeBlockRequest(callbackBlock.Previous)
 	if err != nil {
 		klog.Errorf("Error making block request %s", err)
 		return c.Status(fiber.StatusOK).SendString("ok")
@@ -111,7 +116,7 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 	minimumNotification.SetString("1000000000000000000000000", 10)
 
 	curBalance := big.NewInt(0)
-	curBalance, ok := curBalance.SetString(callback.Block.Balance, 10)
+	curBalance, ok := curBalance.SetString(callbackBlock.Balance, 10)
 	if !ok {
 		klog.Error("Error settingcur balance")
 		return c.Status(fiber.StatusOK).SendString("ok")
@@ -129,7 +134,7 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 		// Is a send we want to notify if we can
 		// See if we have any tokens for this account
 		var tokens []dbmodels.FcmToken
-		if err := hc.DB.Where("account = ?", callback.Block.LinkAsAccount).Find(&tokens).Error; err != nil {
+		if err := hc.DB.Where("account = ?", callbackBlock.LinkAsAccount).Find(&tokens).Error; err != nil {
 			// No tokens
 			return c.Status(fiber.StatusOK).SendString("ok")
 		}
@@ -167,12 +172,12 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 				Priority: "high",
 				Data: map[string]interface{}{
 					"click_action": "FLUTTER_NOTIFICATION_CLICK",
-					"account":      callback.Block.LinkAsAccount,
+					"account":      callbackBlock.LinkAsAccount,
 				},
 				Notification: &fcm.Notification{
 					Title: notificationTitle,
 					Body:  notificationBody,
-					Tag:   callback.Block.LinkAsAccount,
+					Tag:   callbackBlock.LinkAsAccount,
 					Sound: "default",
 				},
 			}
