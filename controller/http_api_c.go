@@ -188,7 +188,11 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 				},
 			}
 			klog.Infof("Sending notification to %s", token.FcmToken)
-			hc.FcmClient.Send(msg)
+			_, err := hc.FcmClient.Send(msg)
+			if err != nil {
+				klog.Errorf("Error sending notification %s", err)
+				return c.Status(fiber.StatusOK).SendString("ok")
+			}
 		}
 	}
 
