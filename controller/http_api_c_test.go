@@ -20,9 +20,6 @@ import (
 var app *fiber.App
 
 func init() {
-	// Mock redis client
-	os.Setenv("MOCK_REDIS", "true")
-	defer os.Unsetenv("MOCK_REDIS")
 	// Mock http responses
 	net.Client = &mocks.MockClient{}
 	// Setup fiber

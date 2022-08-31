@@ -8,18 +8,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func init() {
+func TestMockRedis(t *testing.T) {
+	// Mock redis client
 	os.Setenv("MOCK_REDIS", "true")
 	defer os.Unsetenv("MOCK_REDIS")
-}
-
-func TestMockRedis(t *testing.T) {
 	// Ensure we are using the mock redis
 	redis := GetRedisDB()
 	assert.Equal(t, true, redis.Mock)
 }
 
 func TestSet(t *testing.T) {
+	// Mock redis client
+	os.Setenv("MOCK_REDIS", "true")
+	defer os.Unsetenv("MOCK_REDIS")
 	k := "key"
 	v := "v"
 	err := GetRedisDB().Set(k, v, 0)
@@ -27,6 +28,9 @@ func TestSet(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
+	// Mock redis client
+	os.Setenv("MOCK_REDIS", "true")
+	defer os.Unsetenv("MOCK_REDIS")
 	k := "key"
 	v := "v"
 	err := GetRedisDB().Set(k, v, 0)
@@ -37,6 +41,9 @@ func TestGet(t *testing.T) {
 }
 
 func TestDel(t *testing.T) {
+	// Mock redis client
+	os.Setenv("MOCK_REDIS", "true")
+	defer os.Unsetenv("MOCK_REDIS")
 	k := "key"
 	v := "v"
 	err := GetRedisDB().Set(k, v, 0)
@@ -47,6 +54,9 @@ func TestDel(t *testing.T) {
 }
 
 func TestHset(t *testing.T) {
+	// Mock redis client
+	os.Setenv("MOCK_REDIS", "true")
+	defer os.Unsetenv("MOCK_REDIS")
 	h := "hashes"
 	k := "key"
 	v := "v"
@@ -55,6 +65,9 @@ func TestHset(t *testing.T) {
 }
 
 func TestHget(t *testing.T) {
+	// Mock redis client
+	os.Setenv("MOCK_REDIS", "true")
+	defer os.Unsetenv("MOCK_REDIS")
 	h := "hashes"
 	k := "key"
 	v := "v"
@@ -66,6 +79,9 @@ func TestHget(t *testing.T) {
 }
 
 func TestHlen(t *testing.T) {
+	// Mock redis client
+	os.Setenv("MOCK_REDIS", "true")
+	defer os.Unsetenv("MOCK_REDIS")
 	h := "hashes"
 	k := "key"
 	v := "v"
@@ -77,6 +93,9 @@ func TestHlen(t *testing.T) {
 }
 
 func TestHdel(t *testing.T) {
+	// Mock redis client
+	os.Setenv("MOCK_REDIS", "true")
+	defer os.Unsetenv("MOCK_REDIS")
 	h := "hashes"
 	k := "key"
 	v := "v"
@@ -89,6 +108,9 @@ func TestHdel(t *testing.T) {
 }
 
 func TestHgetall(t *testing.T) {
+	// Mock redis client
+	os.Setenv("MOCK_REDIS", "true")
+	defer os.Unsetenv("MOCK_REDIS")
 	h := "hashes"
 	k := "key"
 	k2 := "key2"

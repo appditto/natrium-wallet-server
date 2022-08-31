@@ -13,14 +13,14 @@ import (
 )
 
 func init() {
-	// Mock redis client
-	os.Setenv("MOCK_REDIS", "true")
-	defer os.Unsetenv("MOCK_REDIS")
 	// Mock HTTP client
 	Client = &mocks.MockClient{}
 }
 
 func TestDolarTodayPrice(t *testing.T) {
+	// Mock redis client
+	os.Setenv("MOCK_REDIS", "true")
+	defer os.Unsetenv("MOCK_REDIS")
 	// Simulate response
 	mocks.GetDoFunc = func(req *http.Request) (*http.Response, error) {
 		return &http.Response{
@@ -40,6 +40,9 @@ func TestDolarTodayPrice(t *testing.T) {
 }
 
 func TestDolarSiPrice(t *testing.T) {
+	// Mock redis client
+	os.Setenv("MOCK_REDIS", "true")
+	defer os.Unsetenv("MOCK_REDIS")
 	// Simulate response
 	mocks.GetDoFunc = func(req *http.Request) (*http.Response, error) {
 		return &http.Response{
@@ -59,6 +62,9 @@ func TestDolarSiPrice(t *testing.T) {
 }
 
 func TestUpdateNanoPrice(t *testing.T) {
+	// Mock redis client
+	os.Setenv("MOCK_REDIS", "true")
+	defer os.Unsetenv("MOCK_REDIS")
 	// Simulate response
 	mocks.GetDoFunc = func(req *http.Request) (*http.Response, error) {
 		return &http.Response{
@@ -163,6 +169,9 @@ func TestUpdateNanoPrice(t *testing.T) {
 }
 
 func TestUpdateBananoPrice(t *testing.T) {
+	// Mock redis client
+	os.Setenv("MOCK_REDIS", "true")
+	defer os.Unsetenv("MOCK_REDIS")
 	// Simulate response
 	mocks.GetDoFunc = func(req *http.Request) (*http.Response, error) {
 		return &http.Response{
