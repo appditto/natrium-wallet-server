@@ -64,7 +64,8 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		}
 		// Limit the maximum count
 		if accountHistory.Count != nil && *accountHistory.Count > 3500 {
-			*accountHistory.Count = 3500
+			count := 3500
+			accountHistory.Count = &count
 		}
 		// Post request as-is to node
 		response, err := hc.RPCClient.MakeRequest(accountHistory)
@@ -132,7 +133,8 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
 			}
 			workBase = hex.EncodeToString(workbaseBytes)
-			*processRequest.SubType = "open"
+			subtype := "open"
+			processRequest.SubType = &subtype
 		} else {
 			workBase = processRequest.JsonBlock.Previous
 			// Since we are here, let's validate the frontier
@@ -212,7 +214,8 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		if err := json.Unmarshal(c.Request().Body(), &pendingRequest); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
 		}
-		*pendingRequest.IncludeOnlyConfirmed = true
+		ioc := true
+		pendingRequest.IncludeOnlyConfirmed = &ioc
 		rawResp, err := hc.RPCClient.MakeRequest(pendingRequest)
 		if err != nil {
 			klog.Errorf("Error making pending request %s", err)
