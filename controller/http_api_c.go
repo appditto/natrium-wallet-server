@@ -79,7 +79,7 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
 	}
 
-	action := strings.ToLower(baseRequest["action"].(string))
+	action := strings.ToLower(fmt.Sprintf("%v", baseRequest["action"]))
 
 	if !slices.Contains(supportedActions, action) {
 		klog.Errorf("Action %s is not supported", action)
@@ -88,7 +88,7 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 
 	// Trim count if it exists in action, so nobody can overload the node
 	if val, ok := baseRequest["count"]; ok {
-		countAsInt, err := strconv.ParseInt(val.(string), 10, 64)
+		countAsInt, err := strconv.ParseInt(fmt.Sprintf("%v", val), 10, 64)
 		if err != nil {
 			klog.Errorf("Error converting count to int %s", err)
 			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
