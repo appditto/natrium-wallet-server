@@ -30,7 +30,7 @@ type WorkGenerate struct {
 
 // Responses
 type ReceivableResponse struct {
-	Blocks []string `json:"blocks"`
+	Blocks map[string]string `json:"blocks"`
 }
 
 type BlockContents struct {

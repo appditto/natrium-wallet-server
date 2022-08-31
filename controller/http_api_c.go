@@ -1,10 +1,12 @@
 package controller
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 
 	"github.com/appditto/natrium-wallet-server/models"
 	"github.com/appditto/natrium-wallet-server/models/dbmodels"
@@ -77,6 +79,129 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 			})
 		}
 
+		return c.Status(fiber.StatusOK).JSON(responseMap)
+	} else if baseRequest.Action == "process" {
+		// Process request
+		var processRequest models.ProcessRequest
+		if err := json.Unmarshal(c.Request().Body(), &processRequest); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+		}
+
+		if processRequest.Block == nil && processRequest.JsonBlock == nil {
+			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+		}
+
+		// Sometimes requests come with a string block representation
+		if processRequest.JsonBlock == nil {
+			if err := json.Unmarshal([]byte(*processRequest.Block), &processRequest.JsonBlock); err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			}
+		}
+
+		if processRequest.JsonBlock.Type != "state" {
+			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+		}
+
+		// Check if we wanna calculate work as part of this request
+		doWork := false
+		if processRequest.DoWork != nil && processRequest.JsonBlock.Work == nil {
+			doWork = *processRequest.DoWork
+		}
+
+		// Determine the type of block
+		if processRequest.SubType == nil {
+			if strings.ReplaceAll(processRequest.JsonBlock.Link, "0", "") == "" {
+				subtype := "change"
+				processRequest.SubType = &subtype
+			}
+		} else if !slices.Contains([]string{"change", "open", "receive", "send"}, *processRequest.SubType) {
+			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+		}
+		// ! TODO - what is the point of this, from old server
+		// 	await r.app['rdata'].set(f"link_{block['link']}", "1", expire=3600)
+
+		// Open blocks generate work on the public key, others use previous
+		var workBase string
+		if processRequest.JsonBlock.Previous == "0" || processRequest.JsonBlock.Previous == "0000000000000000000000000000000000000000000000000000000000000000" {
+			workbaseBytes, err := utils.AddressToPub(processRequest.JsonBlock.Account)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			}
+			workBase = hex.EncodeToString(workbaseBytes)
+			*processRequest.SubType = "open"
+		} else {
+			workBase = processRequest.JsonBlock.Previous
+			// Since we are here, let's validate the frontier
+			accountInfo, err := hc.RPCClient.MakeAccountInfoRequest(processRequest.JsonBlock.Account)
+			if err != nil {
+				klog.Errorf("Error making account info request %s", err)
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "Error making account info request",
+				})
+			}
+			if strings.ToLower(fmt.Sprintf("%s", accountInfo["frontier"])) != strings.ToLower(processRequest.JsonBlock.Previous) {
+				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			}
+		}
+
+		// We're g2g
+		var difficultyMultiplier int
+		if hc.BananoMode {
+			difficultyMultiplier = 1
+		} else if processRequest.SubType == nil {
+			// ! TODO - would be good to check if this is a send or receive if subtype isn't included
+			difficultyMultiplier = 64
+		} else if slices.Contains([]string{"change", "send"}, *processRequest.SubType) {
+			difficultyMultiplier = 64
+		} else {
+			difficultyMultiplier = 1
+		}
+		if doWork {
+			work, err := hc.RPCClient.WorkGenerate(workBase, difficultyMultiplier)
+			if err != nil {
+				klog.Errorf("Error generating work %s", err)
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "Error generating work",
+				})
+			}
+			processRequest.JsonBlock.Work = &work
+		}
+
+		if processRequest.JsonBlock.Work == nil {
+			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+		}
+
+		// Now G2G to actually broadcast it
+		serialized, err := json.Marshal(processRequest.JsonBlock)
+		if err != nil {
+			klog.Errorf("Error marshalling block %s", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Error marshalling block",
+			})
+		}
+		asStr := string(serialized)
+		finalProcessRequest := models.ProcessRequest{
+			Action: "process",
+			Block:  &asStr,
+		}
+		rawResp, err := hc.RPCClient.MakeRequest(finalProcessRequest)
+		if err != nil {
+			klog.Errorf("Error making process request %s", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Error making process request",
+			})
+		}
+		var responseMap map[string]interface{}
+		err = json.Unmarshal(rawResp, &responseMap)
+		if err != nil {
+			klog.Errorf("Error unmarshalling response %s", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Error unmarshalling response",
+			})
+		}
+		if _, ok := responseMap["hash"]; !ok {
+			return c.Status(fiber.StatusBadRequest).JSON(responseMap)
+		}
 		return c.Status(fiber.StatusOK).JSON(responseMap)
 	}
 
