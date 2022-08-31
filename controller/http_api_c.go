@@ -28,7 +28,37 @@ type HttpController struct {
 }
 
 var supportedActions = []string{
-	"account_history", "process", "pending",
+	"account_history",
+	"process",
+	"pending",
+	"account_balance",
+	"account_block_count",
+	"account_check",
+	"account_info",
+	"account_representative",
+	"account_subscribe",
+	"account_weight",
+	"accounts_balances",
+	"accounts_frontiers",
+	"accounts_pending",
+	"available_supply",
+	"block",
+	"block_hash",
+	"blocks",
+	"block_info",
+	"blocks_info",
+	"block_account", "block_count",
+	"block_count_type",
+	"chain",
+	"frontiers",
+	"frontier_count",
+	"history",
+	"key_expand",
+	"representatives",
+	"republish",
+	"peers",
+	"version",
+	"pending_exists",
 }
 
 // HandleHTTPRequest handles all requests to the http server
@@ -39,19 +69,38 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 	// ipAddress := utils.IPAddress(c)
 
 	// Determine type of message and unMarshal
-	var baseRequest models.BaseRequest
+	var baseRequest map[string]interface{}
 	if err := json.Unmarshal(c.Request().Body(), &baseRequest); err != nil {
 		klog.Errorf("Error unmarshalling http base request %s", err)
 		return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
 	}
 
-	if !slices.Contains(supportedActions, baseRequest.Action) {
-		klog.Errorf("Action %s is not supported", baseRequest.Action)
+	if _, ok := baseRequest["action"]; !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+	}
+
+	action := strings.ToLower(baseRequest["action"].(string))
+
+	if !slices.Contains(supportedActions, action) {
+		klog.Errorf("Action %s is not supported", action)
 		return c.Status(fiber.StatusBadRequest).JSON(models.UNSUPPORTED_ACTION_ERR)
 	}
 
+	// Trim count if it exists in action, so nobody can overload the node
+	if val, ok := baseRequest["count"]; ok {
+		countAsInt, err := strconv.ParseInt(val.(string), 10, 64)
+		if err != nil {
+			klog.Errorf("Error converting count to int %s", err)
+			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+		}
+		if countAsInt > 3500 || countAsInt < 0 {
+			countAsInt = 3500
+		}
+		baseRequest["count"] = countAsInt
+	}
+
 	// Handle actions
-	if baseRequest.Action == "account_history" {
+	if action == "account_history" {
 		// Retrieve account history
 		var accountHistory models.AccountHistory
 		if err := json.Unmarshal(c.Request().Body(), &accountHistory); err != nil {
@@ -61,11 +110,6 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		// Check if account is valid
 		if !utils.ValidateAddress(accountHistory.Account, hc.BananoMode) {
 			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
-		}
-		// Limit the maximum count
-		if accountHistory.Count != nil && *accountHistory.Count > 3500 {
-			count := 3500
-			accountHistory.Count = &count
 		}
 		// Post request as-is to node
 		response, err := hc.RPCClient.MakeRequest(accountHistory)
@@ -85,7 +129,7 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		}
 
 		return c.Status(fiber.StatusOK).JSON(responseMap)
-	} else if baseRequest.Action == "process" {
+	} else if action == "process" {
 		// Process request
 		var processRequest models.ProcessRequest
 		if err := json.Unmarshal(c.Request().Body(), &processRequest); err != nil {
@@ -209,7 +253,7 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusBadRequest).JSON(responseMap)
 		}
 		return c.Status(fiber.StatusOK).JSON(responseMap)
-	} else if baseRequest.Action == "pending" {
+	} else if action == "pending" {
 		var pendingRequest models.PendingRequest
 		if err := json.Unmarshal(c.Request().Body(), &pendingRequest); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
@@ -234,7 +278,22 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(responseMap)
 	}
 
-	return c.Status(fiber.StatusBadRequest).JSON(models.UNSUPPORTED_ACTION_ERR)
+	rawResp, err := hc.RPCClient.MakeRequest(baseRequest)
+	if err != nil {
+		klog.Errorf("Error making request %s", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Error making request",
+		})
+	}
+	var responseMap map[string]interface{}
+	err = json.Unmarshal(rawResp, &responseMap)
+	if err != nil {
+		klog.Errorf("Error unmarshalling response %s", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Error unmarshalling response",
+		})
+	}
+	return c.Status(fiber.StatusOK).JSON(responseMap)
 }
 
 func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
