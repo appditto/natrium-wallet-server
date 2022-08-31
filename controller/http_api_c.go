@@ -9,22 +9,24 @@ import (
 	"strings"
 
 	"github.com/appditto/natrium-wallet-server/models"
-	"github.com/appditto/natrium-wallet-server/models/dbmodels"
 	"github.com/appditto/natrium-wallet-server/net"
+	"github.com/appditto/natrium-wallet-server/repository"
 	"github.com/appditto/natrium-wallet-server/utils"
 	"github.com/appleboy/go-fcm"
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/exp/slices"
-	"gorm.io/gorm"
 	"k8s.io/klog/v2"
 )
 
+// ! TODO - some of this stuff should be broken into separate functions, which would make it easier to add better integration tests
+// ! e.g. `process` has a lot of logic in the http handler
+
 type HttpController struct {
-	RPCClient   *net.RPCClient
-	BananoMode  bool
-	WSClientMap *WSClientMap
-	DB          *gorm.DB
-	FcmClient   *fcm.Client
+	RPCClient    *net.RPCClient
+	BananoMode   bool
+	WSClientMap  *WSClientMap
+	FcmTokenRepo *repository.FcmTokenRepo
+	FcmClient    *fcm.Client
 }
 
 var supportedActions = []string{
@@ -64,7 +66,6 @@ var supportedActions = []string{
 // HandleHTTPRequest handles all requests to the http server
 // It's generally designed to mimic the nano node's RPC API
 // Though we do additional processing in the middle for some actions
-// ! TODO - should probably move these handlers out to separate file
 func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 	// ipAddress := utils.IPAddress(c)
 
@@ -342,15 +343,13 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 	if sendAmount.Cmp(minimumNotification) > 0 {
 		// Is a send we want to notify if we can
 		// See if we have any tokens for this account
-		var tokens []dbmodels.FcmToken
-		if err := hc.DB.Where("account = ?", callbackBlock.LinkAsAccount).Find(&tokens).Error; err != nil {
-			// ! Debug
-			klog.Errorf("Error finding tokens %s", err)
+		tokens, err := hc.FcmTokenRepo.GetTokensForAccount(callbackBlock.LinkAsAccount)
+		if err != nil {
+			klog.Errorf("Error finding tokens for account %s %v", tokens, err)
 			// No tokens
 			return c.Status(fiber.StatusOK).SendString("ok")
 		}
 		if len(tokens) == 0 {
-			// ! DEBUG
 			klog.Errorf("No tokens found for account %s", callbackBlock.LinkAsAccount)
 			// No tokens
 			return c.Status(fiber.StatusOK).SendString("ok")

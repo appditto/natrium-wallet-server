@@ -10,6 +10,7 @@ import (
 	"github.com/appditto/natrium-wallet-server/database"
 	"github.com/appditto/natrium-wallet-server/gql"
 	"github.com/appditto/natrium-wallet-server/net"
+	"github.com/appditto/natrium-wallet-server/repository"
 	"github.com/appditto/natrium-wallet-server/utils"
 	"github.com/appleboy/go-fcm"
 	"github.com/gofiber/fiber/v2"
@@ -61,7 +62,12 @@ func main() {
 		}
 		os.Exit(0)
 	} else if *bananoPriceUpdate {
-		err := net.UpdateBananoCoingeckoPrices()
+		err := net.UpdateNanoCoingeckoPrices()
+		if err != nil {
+			klog.Errorf("Error updating nano prices: %v", err)
+			os.Exit(1)
+		}
+		err = net.UpdateBananoCoingeckoPrices()
 		if err != nil {
 			klog.Errorf("Error updating banano prices: %v", err)
 			os.Exit(1)
@@ -101,7 +107,7 @@ func main() {
 		if utils.GetEnv("BPOW_URL", "") != "" {
 			bpowUrl = utils.GetEnv("BPOW_URL", "")
 		}
-		bpowClient = gql.NewBpowClient(bpowUrl, utils.GetEnv("BPOW_KEY", ""))
+		bpowClient = gql.NewBpowClient(bpowUrl, utils.GetEnv("BPOW_KEY", ""), false)
 	}
 
 	// Setup RPC Client
@@ -123,14 +129,19 @@ func main() {
 		fcmClient = svc
 	}
 
+	// Create repository
+	fcmRepo := &repository.FcmTokenRepo{
+		DB: db,
+	}
+
 	// Setup controllers
 	pricePrefix := "nano"
 	if *bananoMode {
 		pricePrefix = "banano"
 	}
 	wsClientMap := controller.NewWSSubscriptions()
-	wsc := controller.WsController{RPCClient: &rpcClient, PricePrefix: pricePrefix, WSClientMap: wsClientMap, BananoMode: *bananoMode, DB: db}
-	hc := controller.HttpController{RPCClient: &rpcClient, BananoMode: *bananoMode, DB: db, WSClientMap: wsClientMap, FcmClient: fcmClient}
+	wsc := controller.WsController{RPCClient: &rpcClient, PricePrefix: pricePrefix, WSClientMap: wsClientMap, BananoMode: *bananoMode, FcmTokenRepo: fcmRepo}
+	hc := controller.HttpController{RPCClient: &rpcClient, BananoMode: *bananoMode, FcmTokenRepo: fcmRepo, WSClientMap: wsClientMap, FcmClient: fcmClient}
 
 	// HTTP Routes
 	app.Post("/api", hc.HandleAction)

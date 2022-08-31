@@ -22,7 +22,13 @@ func (client *RPCClient) MakeRequest(request interface{}) ([]byte, error) {
 	requestBody, _ := json.Marshal(request)
 	print(string(requestBody))
 	// HTTP post
-	resp, err := http.Post(client.Url, "application/json", bytes.NewBuffer(requestBody))
+	httpRequest, err := http.NewRequest(http.MethodPost, client.Url, bytes.NewBuffer(requestBody))
+	if err != nil {
+		klog.Errorf("Error building request %s", err)
+		return nil, err
+	}
+	httpRequest.Header.Add("Content-Type", "application/json")
+	resp, err := Client.Do(httpRequest)
 	if err != nil {
 		klog.Errorf("Error making RPC request %s", err)
 		return nil, err
@@ -140,9 +146,15 @@ func (client *RPCClient) WorkGenerate(hash string, difficultyMultiplier int) (st
 
 	requestBody, _ := json.Marshal(request)
 	// HTTP post
-	resp, err := http.Post(utils.GetEnv("WORK_URL", ""), "application/json", bytes.NewBuffer(requestBody))
+	httpRequest, err := http.NewRequest(http.MethodPost, utils.GetEnv("WORK_URL", ""), bytes.NewBuffer(requestBody))
 	if err != nil {
 		klog.Errorf("Error making work gen request %s", err)
+		return "", err
+	}
+	httpRequest.Header.Add("Content-Type", "application/json")
+	resp, err := Client.Do(httpRequest)
+	if err != nil {
+		klog.Errorf("Error processing work gen request %s", err)
 		return "", err
 	}
 	defer resp.Body.Close()

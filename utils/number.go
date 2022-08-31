@@ -41,16 +41,6 @@ func RawToBanano(raw string, truncate bool) (float64, error) {
 	return math.Trunc(f/0.01) * 0.01, nil
 }
 
-// BananoToRaw - Converts Banano amount to Raw amount
-func BananoToRaw(banano float64) string {
-	bananoInt := int(banano * 100)
-	bananoRaw, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
-
-	res := bananoRaw.Mul(bananoRaw, big.NewInt(int64(bananoInt)))
-
-	return fmt.Sprintf("%d", res)
-}
-
 // RawToNano - Converts Raw amount to usable Nano amount
 func RawToNano(raw string, truncate bool) (float64, error) {
 	rawBig, ok := new(big.Float).SetString(raw)
@@ -76,4 +66,26 @@ func RawToNano(raw string, truncate bool) (float64, error) {
 
 	f, _ := bf.Mul(bf, bu).Float64()
 	return f, nil
+}
+
+// BananoToRaw - Converts Banano amount to Raw amount
+func BananoToRaw(banano float64) string {
+	bananoInt := int(banano * 100)
+	// 0.01 banano
+	bananoRaw, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
+
+	res := bananoRaw.Mul(bananoRaw, big.NewInt(int64(bananoInt)))
+
+	return fmt.Sprintf("%d", res)
+}
+
+// NanoToRaw - Converts Nano amount to Raw amount
+func NanoToRaw(nano float64) string {
+	nanoInt := int(nano * 1000000)
+	// 0.000001 nano
+	nanoRaw, _ := new(big.Int).SetString("1000000000000000000000000", 10)
+
+	res := nanoRaw.Mul(nanoRaw, big.NewInt(int64(nanoInt)))
+
+	return fmt.Sprintf("%d", res)
 }

@@ -22,7 +22,12 @@ var CurrencyList = []string{
 // Base request
 func MakeGetRequest(url string) ([]byte, error) {
 	// HTTP get
-	resp, err := http.Get(url)
+	request, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		klog.Errorf("Error making request %s", err)
+		return nil, err
+	}
+	resp, err := Client.Do(request)
 	if err != nil {
 		klog.Errorf("Error making coingecko request %s", err)
 		return nil, err
@@ -160,10 +165,6 @@ func UpdateNanoCoingeckoPrices() error {
 
 func UpdateBananoCoingeckoPrices() error {
 	klog.Info("Updating BANANO prices\n")
-	err := UpdateNanoCoingeckoPrices()
-	if err != nil {
-		return err
-	}
 	rawResp, err := MakeGetRequest(config.BANANO_CG_URL)
 	if err != nil {
 		return err

@@ -24,7 +24,7 @@ var nanoRegex = regexp.MustCompile(nanoRegexStr)
 func ValidateAddress(account string, bananoMode bool) bool {
 	if bananoMode && !bananoRegex.MatchString(account) {
 		return false
-	} else if !nanoRegex.MatchString(account) {
+	} else if !bananoMode && !nanoRegex.MatchString(account) {
 		return false
 	}
 

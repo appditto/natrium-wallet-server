@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Khan/genqlient/graphql"
+	"github.com/appditto/natrium-wallet-server/utils/mocks"
 )
 
 type GQLError string
@@ -30,9 +31,15 @@ func (t *authedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return t.wrapped.RoundTrip(req)
 }
 
-func NewBpowClient(url string, token string) *BpowClient {
+func NewBpowClient(url string, token string, mock bool) *BpowClient {
+	var gqlClient graphql.Client
+	if !mock {
+		gqlClient = graphql.NewClient(url, &http.Client{Transport: &authedTransport{wrapped: http.DefaultTransport, token: token}})
+	} else {
+		gqlClient = graphql.NewClient(url, &mocks.MockClient{})
+	}
 	return &BpowClient{
-		client: graphql.NewClient(url, &http.Client{Transport: &authedTransport{wrapped: http.DefaultTransport, token: token}}),
+		client: gqlClient,
 		ctx:    context.Background(),
 	}
 }

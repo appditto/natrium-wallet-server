@@ -4,26 +4,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/appditto/natrium-wallet-server/database"
 	"github.com/appditto/natrium-wallet-server/models"
-	"github.com/appditto/natrium-wallet-server/models/dbmodels"
 	"github.com/appditto/natrium-wallet-server/net"
+	"github.com/appditto/natrium-wallet-server/repository"
 	"github.com/appditto/natrium-wallet-server/utils"
 	"github.com/gofiber/websocket/v2"
 	"github.com/google/uuid"
 	"golang.org/x/exp/slices"
-	"gorm.io/gorm"
 	"k8s.io/klog/v2"
 )
 
+// ! TODO - break this up into smaller functions
+// ! Add test coverage
+
 type WsController struct {
-	RPCClient   *net.RPCClient
-	PricePrefix string
-	WSClientMap *WSClientMap
-	BananoMode  bool
-	DB          *gorm.DB
+	RPCClient    *net.RPCClient
+	PricePrefix  string
+	WSClientMap  *WSClientMap
+	BananoMode   bool
+	FcmTokenRepo *repository.FcmTokenRepo
 }
 
 func (wc *WsController) HandleWSMessage(c *websocket.Conn) {
@@ -126,7 +127,7 @@ func (wc *WsController) HandleWSMessage(c *websocket.Conn) {
 			if wc.BananoMode {
 				// Also tag nano price
 				// response['nano'] = float(await r.app['rdata'].hget("prices", f"{self.price_prefix}-nano"))
-				priceNano, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("%s-nano", wc.PricePrefix))
+				priceNano, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-nano", wc.PricePrefix))
 				if err != nil {
 					klog.Errorf("Error getting nano price %v", err)
 				}
@@ -148,23 +149,10 @@ func (wc *WsController) HandleWSMessage(c *websocket.Conn) {
 			// Or remove the token, if notifications disabled
 			if !subscribeRequest.NotificationEnabled {
 				// Set token in db
-				wc.DB.Delete(&dbmodels.FcmToken{}, "fcm_token = ?", subscribeRequest.FcmToken)
+				wc.FcmTokenRepo.DeleteFcmToken(subscribeRequest.FcmToken)
 			} else {
-				// Add token to db if not exists
-				var count int64
-				err = wc.DB.Model(&dbmodels.FcmToken{}).Where("fcm_token = ?", subscribeRequest.FcmToken).Where("account = ?", subscribeRequest.Account).Count(&count).Error
-				if err != nil || count == 0 {
-					fcmToken := &dbmodels.FcmToken{
-						FcmToken: subscribeRequest.FcmToken,
-						Account:  subscribeRequest.Account,
-					}
-					wc.DB.Create(fcmToken)
-				} else if count > 0 {
-					// Already exists so we will update updated_at
-					if err = wc.DB.Model(&dbmodels.FcmToken{}).Where("fcm_token = ?", subscribeRequest.FcmToken).Where("account = ?", subscribeRequest.Account).Update("updated_at", time.Now()).Error; err != nil {
-						klog.Errorf("Error updating fcm token updated_at %v", err)
-					}
-				}
+				// Add/update token if not exists
+				wc.FcmTokenRepo.AddOrUpdateToken(subscribeRequest.FcmToken, subscribeRequest.Account)
 			}
 		} else if baseRequest.Action == "fcm_update" {
 			// Update FCM/notification preferences
@@ -185,23 +173,10 @@ func (wc *WsController) HandleWSMessage(c *websocket.Conn) {
 			// Do the updoot
 			if !fcmUpdateRequest.Enabled {
 				// Set token in db
-				wc.DB.Delete(&dbmodels.FcmToken{}, "fcm_token = ?", fcmUpdateRequest.FcmToken)
+				wc.FcmTokenRepo.DeleteFcmToken(fcmUpdateRequest.FcmToken)
 			} else {
 				// Add token to db if not exists
-				var count int64
-				err = wc.DB.Model(&dbmodels.FcmToken{}).Where("fcm_token = ?", fcmUpdateRequest.FcmToken).Where("account = ?", fcmUpdateRequest.Account).Count(&count).Error
-				if err != nil || count == 0 {
-					fcmToken := &dbmodels.FcmToken{
-						FcmToken: fcmUpdateRequest.FcmToken,
-						Account:  fcmUpdateRequest.Account,
-					}
-					wc.DB.Create(fcmToken)
-				} else if count > 0 {
-					// Already exists so we will update updated_at
-					if err = wc.DB.Model(&dbmodels.FcmToken{}).Where("fcm_token = ?", fcmUpdateRequest.FcmToken).Where("account = ?", fcmUpdateRequest.Account).Update("updated_at", time.Now()).Error; err != nil {
-						klog.Errorf("Error updating fcm token updated_at %v", err)
-					}
-				}
+				wc.FcmTokenRepo.AddOrUpdateToken(fcmUpdateRequest.FcmToken, fcmUpdateRequest.Account)
 			}
 		} else {
 			// Unknown request via websocket
