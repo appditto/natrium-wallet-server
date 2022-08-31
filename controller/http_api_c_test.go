@@ -12,9 +12,9 @@ import (
 	"github.com/appditto/natrium-wallet-server/database"
 	"github.com/appditto/natrium-wallet-server/net"
 	"github.com/appditto/natrium-wallet-server/repository"
-	"github.com/appditto/natrium-wallet-server/utils"
 	"github.com/appditto/natrium-wallet-server/utils/mocks"
 	"github.com/gofiber/fiber/v2"
+	"github.com/stretchr/testify/assert"
 )
 
 var app *fiber.App
@@ -62,13 +62,13 @@ func TestUnsupportedAction(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, _ := app.Test(req)
-	utils.AssertEqual(t, 400, resp.StatusCode)
+	assert.Equal(t, 400, resp.StatusCode)
 
 	var respJson map[string]interface{}
 	respBody, _ := io.ReadAll(resp.Body)
 	json.Unmarshal(respBody, &respJson)
 
-	utils.AssertEqual(t, "The requested action is not supported in this API", respJson["error"])
+	assert.Equal(t, "The requested action is not supported in this API", respJson["error"])
 }
 
 func TestSupportedAction(t *testing.T) {
@@ -92,11 +92,11 @@ func TestSupportedAction(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, _ := app.Test(req)
-	utils.AssertEqual(t, 200, resp.StatusCode)
+	assert.Equal(t, 200, resp.StatusCode)
 
 	var respJson map[string]interface{}
 	respBody, _ := io.ReadAll(resp.Body)
 	json.Unmarshal(respBody, &respJson)
 
-	utils.AssertEqual(t, "10000", respJson["balance"])
+	assert.Equal(t, "10000", respJson["balance"])
 }

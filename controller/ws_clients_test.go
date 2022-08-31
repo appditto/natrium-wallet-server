@@ -3,8 +3,8 @@ package controller
 import (
 	"testing"
 
-	"github.com/appditto/natrium-wallet-server/utils"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestWsClientPut(t *testing.T) {
@@ -14,8 +14,8 @@ func TestWsClientPut(t *testing.T) {
 		id: id,
 	})
 
-	utils.AssertEqual(t, id, wsClients.Get(id).id)
-	utils.AssertEqual(t, 1, wsClients.Len())
+	assert.Equal(t, id, wsClients.Get(id).id)
+	assert.Equal(t, 1, wsClients.Len())
 }
 
 func TestWsClientPutOnlyOnce(t *testing.T) {
@@ -29,8 +29,8 @@ func TestWsClientPutOnlyOnce(t *testing.T) {
 		id: id,
 	})
 
-	utils.AssertEqual(t, id, wsClients.Get(id).id)
-	utils.AssertEqual(t, 1, wsClients.Len())
+	assert.Equal(t, id, wsClients.Get(id).id)
+	assert.Equal(t, 1, wsClients.Len())
 }
 
 func TestWsClientAddAccount(t *testing.T) {
@@ -43,9 +43,9 @@ func TestWsClientAddAccount(t *testing.T) {
 	wsClients.AddAccount(id, "account_1")
 	wsClients.AddAccount(id, "account_2")
 	wsClients.AddAccount(id, "account_2")
-	utils.AssertEqual(t, "account_1", wsClients.Get(id).accounts[0])
-	utils.AssertEqual(t, "account_2", wsClients.Get(id).accounts[1])
-	utils.AssertEqual(t, 2, len(wsClients.Get(id).accounts))
+	assert.Equal(t, "account_1", wsClients.Get(id).accounts[0])
+	assert.Equal(t, "account_2", wsClients.Get(id).accounts[1])
+	assert.Equal(t, 2, len(wsClients.Get(id).accounts))
 }
 
 func TestWsClientUpdateCurrency(t *testing.T) {
@@ -56,9 +56,9 @@ func TestWsClientUpdateCurrency(t *testing.T) {
 	})
 
 	wsClients.UpdateCurrency(id, "TRY")
-	utils.AssertEqual(t, "TRY", wsClients.Get(id).currency)
+	assert.Equal(t, "TRY", wsClients.Get(id).currency)
 	wsClients.UpdateCurrency(id, "USD")
-	utils.AssertEqual(t, "USD", wsClients.Get(id).currency)
+	assert.Equal(t, "USD", wsClients.Get(id).currency)
 }
 
 func TestWsClientDelete(t *testing.T) {
@@ -68,10 +68,21 @@ func TestWsClientDelete(t *testing.T) {
 		id: id,
 	})
 
-	utils.AssertEqual(t, id, wsClients.Get(id).id)
-	utils.AssertEqual(t, 1, wsClients.Len())
+	assert.Equal(t, id, wsClients.Get(id).id)
+	assert.Equal(t, 1, wsClients.Len())
 
 	wsClients.Delete(id)
-	utils.AssertEqual(t, 0, wsClients.Len())
-	utils.AssertEqual(t, (*WSClient)(nil), wsClients.Get(id))
+	assert.Equal(t, 0, wsClients.Len())
+	assert.Equal(t, (*WSClient)(nil), wsClients.Get(id))
+}
+
+func TestWsClientindexOf(t *testing.T) {
+	id := uuid.MustParse("12345678-1234-1234-1234-1234567890ab")
+	wsClients := NewWSSubscriptions()
+	wsClients.Put(WSClient{
+		id: id,
+	})
+
+	assert.Equal(t, 0, wsClients.indexOf(id))
+	assert.Equal(t, 1, wsClients.Len())
 }

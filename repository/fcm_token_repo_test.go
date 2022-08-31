@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/appditto/natrium-wallet-server/database"
-	"github.com/appditto/natrium-wallet-server/utils"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetTokensForAccount(t *testing.T) {
@@ -19,9 +19,9 @@ func TestGetTokensForAccount(t *testing.T) {
 		SSLMode:  os.Getenv("DB_SSLMODE"),
 		DBName:   "testing",
 	})
-	utils.AssertEqual(t, nil, err)
+	assert.Equal(t, nil, err)
 	err = database.DropAndCreateTables(mockDb)
-	utils.AssertEqual(t, nil, err)
+	assert.Equal(t, nil, err)
 	fcmRepo := &FcmTokenRepo{
 		DB: mockDb,
 	}
@@ -31,14 +31,14 @@ func TestGetTokensForAccount(t *testing.T) {
 
 	// Get tokens for account
 	tokens, err := fcmRepo.GetTokensForAccount("account1")
-	utils.AssertEqual(t, nil, err)
-	utils.AssertEqual(t, 1, len(tokens))
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(tokens))
 	tokens, err = fcmRepo.GetTokensForAccount("account2")
-	utils.AssertEqual(t, nil, err)
-	utils.AssertEqual(t, 2, len(tokens))
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 2, len(tokens))
 	tokens, err = fcmRepo.GetTokensForAccount("account3")
-	utils.AssertEqual(t, nil, err)
-	utils.AssertEqual(t, 0, len(tokens))
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 0, len(tokens))
 }
 
 func TestDeleteToken(t *testing.T) {
@@ -52,9 +52,9 @@ func TestDeleteToken(t *testing.T) {
 		SSLMode:  os.Getenv("DB_SSLMODE"),
 		DBName:   "testing",
 	})
-	utils.AssertEqual(t, nil, err)
+	assert.Equal(t, nil, err)
 	err = database.DropAndCreateTables(mockDb)
-	utils.AssertEqual(t, nil, err)
+	assert.Equal(t, nil, err)
 	fcmRepo := &FcmTokenRepo{
 		DB: mockDb,
 	}
@@ -64,10 +64,10 @@ func TestDeleteToken(t *testing.T) {
 
 	// Delete tokens for account
 	err = fcmRepo.DeleteFcmToken("token1")
-	utils.AssertEqual(t, nil, err)
+	assert.Equal(t, nil, err)
 	tokens, err := fcmRepo.GetTokensForAccount("account1")
-	utils.AssertEqual(t, nil, err)
-	utils.AssertEqual(t, 0, len(tokens))
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 0, len(tokens))
 }
 
 func TestAddOrUpdateToken(t *testing.T) {
@@ -81,9 +81,9 @@ func TestAddOrUpdateToken(t *testing.T) {
 		SSLMode:  os.Getenv("DB_SSLMODE"),
 		DBName:   "testing",
 	})
-	utils.AssertEqual(t, nil, err)
+	assert.Equal(t, nil, err)
 	err = database.DropAndCreateTables(mockDb)
-	utils.AssertEqual(t, nil, err)
+	assert.Equal(t, nil, err)
 	fcmRepo := &FcmTokenRepo{
 		DB: mockDb,
 	}
@@ -93,10 +93,10 @@ func TestAddOrUpdateToken(t *testing.T) {
 
 	// * 2) We want to test adding a new token
 	err = fcmRepo.AddOrUpdateToken("token1", "account_new")
-	utils.AssertEqual(t, nil, err)
+	assert.Equal(t, nil, err)
 
 	tokens, err := fcmRepo.GetTokensForAccount("account_new")
-	utils.AssertEqual(t, nil, err)
-	utils.AssertEqual(t, 1, len(tokens))
-	utils.AssertEqual(t, "token1", tokens[0].FcmToken)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(tokens))
+	assert.Equal(t, "token1", tokens[0].FcmToken)
 }
