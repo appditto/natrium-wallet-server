@@ -78,7 +78,7 @@ func (wc *WsController) HandleWSMessage(c *websocket.Conn) {
 				// Create a UUID for this subscription
 				id = uuid.New()
 			}
-			wc.WSClientMap.Put(WSClient{id: id, accounts: []string{}, currency: "usd"})
+			wc.WSClientMap.Put(WSClient{id: id, accounts: []string{}, currency: "usd", conn: c})
 			// Cleanups when connection is closed
 			defer wc.WSClientMap.Delete(id)
 

@@ -3,6 +3,7 @@ package controller
 import (
 	"testing"
 
+	"github.com/gofiber/websocket/v2"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
@@ -85,4 +86,28 @@ func TestWsClientindexOf(t *testing.T) {
 
 	assert.Equal(t, 0, wsClients.indexOf(id))
 	assert.Equal(t, 1, wsClients.Len())
+}
+
+func TestGetConnsForAccount(t *testing.T) {
+	id := uuid.MustParse("12345678-1234-1234-1234-1234567890ab")
+	wsClients := NewWSSubscriptions()
+	conn1 := &websocket.Conn{}
+	wsClients.Put(WSClient{
+		id: id,
+		accounts: []string{
+			"account_1",
+		},
+		conn: conn1,
+	})
+	id2 := uuid.MustParse("22345678-1234-1234-1234-1234567890ab")
+	conn2 := &websocket.Conn{}
+	wsClients.Put(WSClient{
+		id: id2,
+		accounts: []string{
+			"account_2",
+		},
+		conn: conn2,
+	})
+	conns := wsClients.GetConnsForAccount("account_1")
+	assert.Equal(t, 1, len(conns))
 }

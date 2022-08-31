@@ -3,6 +3,7 @@ package controller
 import (
 	"sync"
 
+	"github.com/gofiber/websocket/v2"
 	"github.com/google/uuid"
 )
 
@@ -10,6 +11,7 @@ type WSClient struct {
 	id       uuid.UUID
 	accounts []string // Subscribed accounts
 	currency string
+	conn     *websocket.Conn
 }
 
 type WSClientMap struct {
@@ -44,6 +46,21 @@ func (r *WSClientMap) accountExists(id uuid.UUID, account string) bool {
 		}
 	}
 	return false
+}
+
+// Get accounts
+func (r *WSClientMap) GetConnsForAccount(account string) []*websocket.Conn {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var conns []*websocket.Conn
+	for _, v := range r.subscriptions {
+		for _, a := range v.accounts {
+			if a == account {
+				conns = append(conns, v.conn)
+			}
+		}
+	}
+	return conns
 }
 
 // Get length - synchronized
