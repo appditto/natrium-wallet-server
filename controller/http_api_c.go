@@ -222,17 +222,10 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		}
 
 		// Now G2G to actually broadcast it
-		serialized, err := json.Marshal(processRequest.JsonBlock)
-		if err != nil {
-			klog.Errorf("Error marshalling block %s", err)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Error marshalling block",
-			})
-		}
-		asStr := string(serialized)
-		finalProcessRequest := models.ProcessRequest{
-			Action: "process",
-			Block:  &asStr,
+		finalProcessRequest := map[string]interface{}{
+			"action":     "process",
+			"json_block": true,
+			"block":      processRequest.JsonBlock,
 		}
 		rawResp, err := hc.RPCClient.MakeRequest(finalProcessRequest)
 		if err != nil {

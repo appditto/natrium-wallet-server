@@ -20,6 +20,7 @@ type RPCClient struct {
 // Base request
 func (client *RPCClient) MakeRequest(request interface{}) ([]byte, error) {
 	requestBody, _ := json.Marshal(request)
+	print(string(requestBody))
 	// HTTP post
 	resp, err := http.Post(client.Url, "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
