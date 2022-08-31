@@ -28,9 +28,13 @@ type HttpController struct {
 }
 
 var supportedActions = []string{
-	"account_history",
+	"account_history", "process", "pending",
 }
 
+// HandleHTTPRequest handles all requests to the http server
+// It's generally designed to mimic the nano node's RPC API
+// Though we do additional processing in the middle for some actions
+// ! TODO - should probably move these handlers out to separate file
 func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 	// ipAddress := utils.IPAddress(c)
 
@@ -201,6 +205,28 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		}
 		if _, ok := responseMap["hash"]; !ok {
 			return c.Status(fiber.StatusBadRequest).JSON(responseMap)
+		}
+		return c.Status(fiber.StatusOK).JSON(responseMap)
+	} else if baseRequest.Action == "pending" {
+		var pendingRequest models.PendingRequest
+		if err := json.Unmarshal(c.Request().Body(), &pendingRequest); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+		}
+		*pendingRequest.IncludeOnlyConfirmed = true
+		rawResp, err := hc.RPCClient.MakeRequest(pendingRequest)
+		if err != nil {
+			klog.Errorf("Error making pending request %s", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Error making pending request",
+			})
+		}
+		var responseMap map[string]interface{}
+		err = json.Unmarshal(rawResp, &responseMap)
+		if err != nil {
+			klog.Errorf("Error unmarshalling response %s", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Error unmarshalling response",
+			})
 		}
 		return c.Status(fiber.StatusOK).JSON(responseMap)
 	}
