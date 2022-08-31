@@ -1,3 +1,4 @@
+//go:generate go run github.com/Khan/genqlient
 package main
 
 import (
@@ -7,6 +8,7 @@ import (
 
 	"github.com/appditto/natrium-wallet-server/controller"
 	"github.com/appditto/natrium-wallet-server/database"
+	"github.com/appditto/natrium-wallet-server/gql"
 	"github.com/appditto/natrium-wallet-server/net"
 	"github.com/appditto/natrium-wallet-server/utils"
 	"github.com/appleboy/go-fcm"
@@ -85,13 +87,28 @@ func main() {
 	fmt.Println("🦋 Running database migrations...")
 	database.Migrate(db)
 
+	if utils.GetEnv("WORK_URL", "") == "" && utils.GetEnv("BPOW_KEY", "") == "" {
+		panic("Either WORK_URL or BPOW_KEY must be set for work generation")
+	}
+
 	// Create app
 	app := fiber.New()
+
+	// BPoW if applicable
+	var bpowClient *gql.BpowClient
+	if utils.GetEnv("BPOW_KEY", "") != "" {
+		bpowUrl := "https://boompow.banano.cc/graphql"
+		if utils.GetEnv("BPOW_URL", "") != "" {
+			bpowUrl = utils.GetEnv("BPOW_URL", "")
+		}
+		bpowClient = gql.NewBpowClient(bpowUrl, utils.GetEnv("BPOW_KEY", ""))
+	}
 
 	// Setup RPC Client
 	nanoRpcUrl := utils.GetEnv("RPC_URL", "http://localhost:7076")
 	rpcClient := net.RPCClient{
-		Url: nanoRpcUrl,
+		Url:        nanoRpcUrl,
+		BpowClient: bpowClient,
 	}
 
 	// Setup FCM client

@@ -6,12 +6,15 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/appditto/natrium-wallet-server/gql"
 	"github.com/appditto/natrium-wallet-server/models"
+	"github.com/appditto/natrium-wallet-server/utils"
 	"k8s.io/klog/v2"
 )
 
 type RPCClient struct {
-	Url string
+	Url        string
+	BpowClient *gql.BpowClient
 }
 
 // Base request
@@ -106,4 +109,55 @@ func (client *RPCClient) MakeBlockRequest(hash string) (models.BlockResponse, er
 		return models.BlockResponse{}, err
 	}
 	return blockResponse, nil
+}
+
+func (client *RPCClient) WorkGenerate(hash string, difficultyMultiplier int) (string, error) {
+	if client.BpowClient != nil {
+		res, err := client.BpowClient.WorkGenerate(hash, difficultyMultiplier)
+		if err != nil || res == "" {
+			klog.Infof("Error generating work with BPOW %s", err)
+			if utils.GetEnv("WORK_URL", "") == "" {
+				return "", err
+			}
+		}
+		return res, nil
+	}
+
+	// Base send difficulty
+	// Nano has 2 difficulties, higher for send, lower for receive
+	// Don't bother deriving it since it can only be one of two values
+	difficulty := "fffffff800000000"
+	if difficultyMultiplier < 64 {
+		difficulty = "fffffe0000000000"
+	}
+
+	request := models.WorkGenerate{
+		Action:     "work_generate",
+		Hash:       hash,
+		Difficulty: difficulty,
+	}
+
+	requestBody, _ := json.Marshal(request)
+	// HTTP post
+	resp, err := http.Post(utils.GetEnv("WORK_URL", ""), "application/json", bytes.NewBuffer(requestBody))
+	if err != nil {
+		klog.Errorf("Error making work gen request %s", err)
+		return "", err
+	}
+	defer resp.Body.Close()
+	// Try to decode+deserialize
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		klog.Errorf("Error decoding work response body %s", err)
+		return "", err
+	}
+
+	var workResp models.WorkResponse
+	err = json.Unmarshal(body, &workResp)
+	if err != nil {
+		klog.Errorf("Error unmarshalling work_gen response %s", err)
+		return "", err
+	}
+
+	return workResp.Work, nil
 }

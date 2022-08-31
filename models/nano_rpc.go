@@ -22,6 +22,12 @@ type BlockRequest struct {
 	JsonBlock bool   `json:"json_block"`
 }
 
+type WorkGenerate struct {
+	Action     string `json:"action"`
+	Hash       string `json:"hash"`
+	Difficulty string `json:"difficulty"`
+}
+
 // Responses
 type ReceivableResponse struct {
 	Blocks []string `json:"blocks"`
@@ -49,4 +55,11 @@ type BlockResponse struct {
 	Confirmed      string        `json:"confirmed"`
 	Contents       BlockContents `json:"contents"`
 	Subtype        string        `json:"subtype"`
+}
+
+type WorkResponse struct {
+	Work       string `json:"work"`
+	Difficulty string `json:"difficulty"`
+	Multiplier string `json:"multiplier"`
+	Hash       string `json:"hash"`
 }

@@ -4,158 +4,73 @@
 
 Natrium and Kalium are mobile wallets written with Flutter. NANO and BANANO are cryptocurrencies.
 
-| Link | Description |
-| :----- | :------ |
-[natrium.io](https://natrium.io) | Natrium Homepage
-[kalium.banano.cc](https://kalium.banano.cc) | Kalium Homepage
-[appditto.com](https://appditto.com) | Appditto Homepage
+| Link                                         | Description       |
+| :------------------------------------------- | :---------------- |
+| [natrium.io](https://natrium.io)             | Natrium Homepage  |
+| [kalium.banano.cc](https://kalium.banano.cc) | Kalium Homepage   |
+| [appditto.com](https://appditto.com)         | Appditto Homepage |
 
 ## Requirements
 
-**Requires Python 3.6 or Newer**
+**GOLang**
 
-Install requirements on Ubuntu 18.04:
-```
-apt install python3 python3-dev libdpkg-perl virtualenv nginx
-```
+Install the latest version of [GO](https://go.dev)
 
-Minimum of one **NANO/BANANO Node** with RPC enabled.
+**NANO/BANANO Node with RPC enabled.**
 
-**Redis server** running on the default port 6379
+Configured by the environment variable `RPC_URL`
 
-On debian-based systems
+e.g.
 
 ```
-sudo apt install redis-server
+export RPC_URL=http://localhost:7076
 ```
 
-## Installation
+**Redis server**
 
-Generally:
-
-1) Run the app under a dedicated user
-2) Clone the repository
-3) Configuration
-4) Run
+Configured with env variables:
 
 ```
-sudo adduser natriumuser # Add natriumuser
-sudo usermod -aG sudo natriumuser # Add natriumuser to sudo group
-sudo usermod -aG www-data natriumuser # Add natriumuser to www-data group
-sudo su - natriumuser # Change to natriumuser
-git clone https://github.com/appditto/natrium-wallet-server.git natriumcast # Clone repository
+REDIS_HOST  # default localhost
+REDIST_PORT # default 6379
+REDIS_DB    # default 0
 ```
 
-Ensure python3.6 or newer is installed (`python3 --version`) and
+**PostgreSQL**
+
+Configured with:
 
 ```
-cd natriumcast
-virtualenv -p python3 venv
-source venv/bin/activate
-pip install -r requirements.txt
+DB_HOST # The host of the database
+DB_PORT # The port to connect to on the database
+DB_NAME # The name of the database
+DB_USER # The user
+DB_PASS # The password
 ```
 
-You must configure using environment variables. You may do this manually, as part of a launching script, in your bash settings, or within a systemd service.
-
-Create the file `.env` in the same directory as `natriumcast.py` with the contents:
+**Other Configuration**
 
 ```
-RPC_URL=http://[::1]:7076 # NANO/BANANO node RPC URL
-DEBUG=0                   # Debug mode (0 is off)
-FCM_API_KEY=None          # (Optional) Firebase Legacy API KEY (From Firebase Console)
-FCM_SENDER_ID=1234        # (Optional) Firebase Sender ID (From Firebase Console)
+FCM_API_KEY # For push notifications
+BPOW_KEY    # To use BoomPoW for work generation
 ```
 
 ## Running
 
-The recommended configuration is to run the server behind [nginx](https://www.nginx.com/), which will act as a reverse proxy
+Compile with `go build -o natrium-server`
 
-Next, we'll define a systemd service unit
+Then run `./natrium-server` or `./natrium-server -banano` for banano mode.
 
-/etc/systemd/system/natriumcast@.service
-```
-[Unit]
-Description=Natrium Server
-After=network.target
+## Work Generation
 
-[Service]
-Type=simple
-User=natriumuser
-Group=www-data
-EnvironmentFile=/home/natriumuser/natriumcast/.env
-WorkingDirectory=/home/natriumuser/natriumcast
-ExecStart=/home/natriumuser/natriumcast/venv/bin/python natriumcast.py --host 127.0.0.1 --port %i --log-file /tmp/natriumcast%i.log
-Restart=on-failure
+Configuring a service for work is required. You have two options.
 
-[Install]
-WantedBy=multi-user.target
-```
+- `WORK_URL` can be set in the environment to a work server (either the same as `RPC_URL`) or something like [nano-work-server](https://github.com/nanocurrency/nano-work-server)
+- `BPOW_KEY` can be set in the environment to use [BoomPoW](https://boompow.banano.cc), BANANO's distributed proof of work system.
 
-Enable this service and start it, ensure all is working as expected
+If both are set, `BPOW` will be preferred, followed by `WORK_URL` in the event of failure.
 
-```
-sudo systemctl enable natriumcast@5076
-sudo systemctl start natriumcast@5076
-sudo systemctl status natriumcast@5076
-```
-
-Next, configure nginx to proxy requests to this server
-
-/etc/nginx/sites-available/app.natrium.io
-
-```
-upstream natrium_nodes {
-        least_conn;
-
-        server 127.0.0.1:5076;
-}
-
-server {
-        server_name app.natrium.io;
-
-        location / {
-                proxy_pass http://natrium_nodes;
-                proxy_redirect off;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-Host $server_name;
-                proxy_set_header X-Forwarded-Proto $scheme;
-                proxy_http_version 1.1;
-                proxy_set_header Host $host;
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection "upgrade";
-        }
-}
-
-```
-
-Enable this configuration and restart nginx
-
-```
-sudo ln -s /etc/nginx/sites-available/app.natrium.io /etc/nginx/sites-enabled/app.natrium.io
-sudo service nginx restart
-```
-
-## Let's encrypt
-
-```
-sudo add-apt-repository ppa:certbot/certbot
-sudo apt update
-sudo apt install python-certbot-nginx 
-sudo certbot --nginx
-```
-
-## Work Server
-
-This server relies on the node for work with the `use_peers` option set to `true`. So you should define your work peers in the config.json as below (if you have any):
-
-```
-work_peers: [
-  "::ffff:127.0.0.1:5555"
-]
-```
-
-dPOW support has been removed, because it is recommended to use [Betsy](https://github.com/bbedward/betsy-middleware) if you need that.
+You can also override `BPOW_URL`, you would never want to do this, unless you are using a forked or self-hosted version of the service.
 
 ## Callback
 
@@ -163,63 +78,6 @@ Callback is required for push notifications and pushing new blocks to clients. T
 
 ```
 "callback_address": "::ffff:127.0.0.1",
-"callback_port": "5076",
+"callback_port": "3000",
 "callback_target": "\/callback",
-```
-
-## [optional] haproxy node load balancing
-Multiple nodes may run on the same server as long as you change the RPC binding port for each. Same for the peering port.
-```
-global
-        log /dev/log    local0
-        log /dev/log    local1 notice
-        chroot /var/lib/haproxy
-        stats socket /run/haproxy/admin.sock mode 660 level admin
-        stats timeout 30s
-        user haproxy
-        group haproxy
-        daemon
-
-        # Default SSL material locations
-        ca-base /etc/ssl/certs
-        crt-base /etc/ssl/private
-
-        # Default ciphers to use on SSL-enabled listening sockets.
-        # For more information, see ciphers(1SSL). This list is from:
-        #  https://hynek.me/articles/hardening-your-web-servers-ssl-ciphers/
-        # An alternative list with additional directives can be obtained from
-        #  https://mozilla.github.io/server-side-tls/ssl-config-generator/?server=haproxy
-        ssl-default-bind-ciphers ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS
-        ssl-default-bind-options no-sslv3
-
-defaults
-        log     global
-        mode    http
-        option  httplog
-        option  dontlognull
-        timeout connect 5000
-        timeout client  50000
-        timeout server  50000
-        errorfile 400 /etc/haproxy/errors/400.http
-        errorfile 403 /etc/haproxy/errors/403.http
-        errorfile 408 /etc/haproxy/errors/408.http
-        errorfile 500 /etc/haproxy/errors/500.http
-        errorfile 502 /etc/haproxy/errors/502.http
-        errorfile 503 /etc/haproxy/errors/503.http
-        errorfile 504 /etc/haproxy/errors/504.http
-
-frontend rpc-frontend
-        bind <this host IP or 127.0.0.1 if same host>:<port>         # different than the default RPC port on a single node
-        mode http
-        default_backend rpc-backend
-        
-backend rpc-backend
-        balance first
-        mode http
-        option forwardfor
-        timeout server 1000
-        option redispatch
-        server rpcbackend1 <node 1 server or localhost>:<rpc port> check
-        server rpcbackend2 <node 2 server or localhost>:<rpc port> check
-        server rpcbackend3 <node 3 server or localhost>:<rpc port> check
 ```

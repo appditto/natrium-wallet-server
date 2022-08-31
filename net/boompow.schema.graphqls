@@ -1,0 +1,122 @@
+enum UserType {
+  PROVIDER
+  REQUESTER
+}
+
+type User {
+  id: ID!
+  email: String!
+  createdAt: String!
+  updatedAt: String!
+  type: UserType!
+  banAddress: String
+}
+
+type StatsUserType {
+  banAddress: String!
+  totalPaidBanano: String!
+}
+
+type StatsServiceType {
+  name: String!
+  website: String!
+  requests: Int!
+}
+
+type Stats {
+  connectedWorkers: Int!
+  totalPaidBanano: String!
+  registeredServiceCount: Int!
+  top10: [StatsUserType]!
+  services: [StatsServiceType]!
+}
+
+input RefreshTokenInput {
+  token: String!
+}
+
+input VerifyEmailInput {
+  email: String!
+  token: String!
+}
+
+input VerifyServiceInput {
+  email: String!
+  token: String!
+}
+
+input UserInput {
+  email: String!
+  password: String!
+  type: UserType!
+  banAddress: String
+  serviceName: String
+  serviceWebsite: String
+}
+
+input LoginInput {
+  email: String!
+  password: String!
+}
+
+input WorkGenerateInput {
+  hash: String!
+  difficultyMultiplier: Int!
+  blockAward: Boolean
+}
+
+input ResetPasswordInput {
+  email: String!
+}
+
+input ResendConfirmationEmailInput {
+  email: String!
+}
+
+type LoginResponse {
+  token: String!
+  email: String!
+  type: UserType!
+  banAddress: String
+  serviceName: String
+  serviceWebsite: String
+  emailVerified: Boolean!
+}
+
+type GetUserResponse {
+  email: String!
+  type: UserType!
+  banAddress: String
+  serviceName: String
+  serviceWebsite: String
+  emailVerified: Boolean!
+  canRequestWork: Boolean!
+}
+
+input ChangePasswordInput {
+  newPassword: String!
+}
+
+type Mutation {
+  # Related to user authentication and authorization
+  createUser(input: UserInput!): User!
+  login(input: LoginInput!): LoginResponse!
+  refreshToken(input: RefreshTokenInput!): String!
+  workGenerate(input: WorkGenerateInput!): String!
+  generateOrGetServiceToken: String!
+  resetPassword(input: ResetPasswordInput!): Boolean!
+  resendConfirmationEmail(input: ResendConfirmationEmailInput!): Boolean!
+  sendConfirmationEmail: Boolean!
+  changePassword(input: ChangePasswordInput!): Boolean!
+}
+
+type Query {
+  # User queries
+  verifyEmail(input: VerifyEmailInput!): Boolean!
+  verifyService(input: VerifyServiceInput!): Boolean!
+  getUser: GetUserResponse!
+}
+
+type Subscription {
+  stats: Stats!
+}

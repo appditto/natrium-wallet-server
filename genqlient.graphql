@@ -1,0 +1,3 @@
+mutation workGenerate($input: WorkGenerateInput!) {
+  workGenerate(input: $input)
+}

@@ -58,3 +58,10 @@ spec:
               secretKeyRef:
                 name: natrium
                 key: fcm_api_key
+          - name: BPOW_KEY
+            valueFrom:
+              secretKeyRef:
+                name: natrium
+                key: bpow_key
+          - name: BPOW_URL
+            value: http://boompow-service.boompow-next:8080/graphql 
