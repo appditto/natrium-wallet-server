@@ -271,6 +271,7 @@ func main() {
 			}
 		}
 	})
+	s.StartAsync()
 
 	app.Listen(":3000")
 }

@@ -349,7 +349,6 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusOK).SendString("ok")
 		}
 		if len(tokens) == 0 {
-			klog.Errorf("No tokens found for account %s", callbackBlock.LinkAsAccount)
 			// No tokens
 			return c.Status(fiber.StatusOK).SendString("ok")
 		}
