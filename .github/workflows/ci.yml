@@ -112,7 +112,7 @@ jobs:
           args: apply -f ./kubernetes/natrium/deployment-k.yaml
 
   deploy_kal:
-    name: 🥳 Deploy kalium server
+    name: 🙉 Deploy kalium server
     needs: build_and_publish
     runs-on: ubuntu-latest
     env:

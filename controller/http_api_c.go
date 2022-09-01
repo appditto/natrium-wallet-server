@@ -374,7 +374,7 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 				klog.Errorf("Error converting raw to nano %s", err)
 				return c.Status(fiber.StatusOK).SendString("ok")
 			}
-			notificationTitle = fmt.Sprintf("Received %s Nano", strconv.FormatFloat(asBan, 'f', -1, 64))
+			notificationTitle = fmt.Sprintf("Received Ӿ%s", strconv.FormatFloat(asBan, 'f', -1, 64))
 		}
 		notificationBody := fmt.Sprintf("Open %s to receive this transaction.", appName)
 
