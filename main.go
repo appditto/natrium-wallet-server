@@ -24,6 +24,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
+var Version = "dev"
+
 func usage() {
 	flag.PrintDefaults()
 	os.Exit(2)
@@ -44,7 +46,13 @@ func main() {
 	nanoPriceUpdate := flag.Bool("nano-price-update", false, "Update nano prices")
 	bananoPriceUpdate := flag.Bool("banano-price-update", false, "Update banano prices")
 	bananoMode := flag.Bool("banano", false, "Run in BANANO mode (Kalium)")
+	version := flag.Bool("version", false, "Display the version")
 	flag.Parse()
+
+	if *version {
+		fmt.Printf("Natrium server version: %s\n", Version)
+		os.Exit(0)
+	}
 
 	// Price job
 	if *bolivarPriceUpdate {
