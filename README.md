@@ -18,12 +18,13 @@ Install the latest version of [GO](https://go.dev)
 
 **NANO/BANANO Node with RPC enabled.**
 
-Configured by the environment variable `RPC_URL`
+Configured by the environment variable `RPC_URL` and `NODE_WS_URL`
 
 e.g.
 
 ```
 export RPC_URL=http://localhost:7076
+export NODE_WS_URL=ws://localhost:7078
 ```
 
 **Redis server**
@@ -74,10 +75,14 @@ You can also override `BPOW_URL`, you would never want to do this, unless you ar
 
 ## Callback
 
-Callback is required for push notifications and pushing new blocks to clients. This can be configured in the node's config.json as follows:
+The HTTP callback is required for push notifications. This can be configured in the node's config.json as follows:
 
 ```
 "callback_address": "::ffff:127.0.0.1",
 "callback_port": "3000",
 "callback_target": "\/callback",
 ```
+
+The websocket on the node is used for other types of notifications, like for connected clients.
+
+This is only so the app can easily be deployed with multiple replicas in production, we want only 1 instance to send push notifications at a time.

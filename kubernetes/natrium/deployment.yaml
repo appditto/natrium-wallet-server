@@ -65,3 +65,5 @@ spec:
                 key: bpow_key
           - name: BPOW_URL
             value: http://boompow-service.boompow-next:8080/graphql 
+          - name: NODE_WS_URL
+            value: ws://10.8.0.2:7078

@@ -171,5 +171,37 @@ func main() {
 		return c.SendStatus(404)
 	})
 
+	// Start nano WS client
+	callbackChan := make(chan *net.WSCallbackMsg, 100)
+	if utils.GetEnv("NODE_WS_URL", "") != "" {
+		go net.StartNanoWSClient(utils.GetEnv("NODE_WS_URL", ""), &callbackChan)
+	}
+
+	// Read channel to notify clients of blocks of new blocks
+	go func() {
+		for msg := range callbackChan {
+			// See if they are subscribed
+			conns := wsClientMap.GetConnsForAccount(msg.Block.LinkAsAccount)
+			if len(conns) > 0 {
+				if msg.Block.Subtype == "send" {
+					msg := map[string]interface{}{
+						"account": msg.Account,
+						"block":   msg.Block,
+						"hash":    msg.Hash,
+						"is_send": "true",
+						"amount":  msg.Amount,
+					}
+					klog.V(3).Infof("Pushing to %d subscribers", len(conns))
+					for _, conn := range conns {
+						// There's a tiny chance this connection was destroyed when we get here, probably not tho
+						if conn != nil {
+							conn.WriteJSON(msg)
+						}
+					}
+				}
+			}
+		}
+	}()
+
 	app.Listen(":3000")
 }

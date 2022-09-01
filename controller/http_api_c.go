@@ -290,11 +290,7 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(responseMap)
 }
 
-// ! TODO - we should separate this one out too and work out test coverage
-// ! There are 3 flows that heppen within this callback
-// ! 1) Pushing a block over connected subscribers, for when they are engaged in the app
-// ! 2) Pushing to socket.io, which is only used for natrium.io donations
-// ! 3) Push notification - to users receiving a transaction
+// HTTP Callback is only for push notifications
 func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 	var callback models.Callback
 	if err := json.Unmarshal(c.Request().Body(), &callback); err != nil {
@@ -308,28 +304,6 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 	}
 
 	klog.V(3).Infof("Received callback for block %s", callback.Hash)
-
-	// * 1) Pushing to connected subscribers, if this is a sent block and they are connected
-	// See if they are subscribed
-	conns := hc.WSClientMap.GetConnsForAccount(callbackBlock.LinkAsAccount)
-	if len(conns) > 0 {
-		if callbackBlock.Subtype == "send" {
-			msg := map[string]interface{}{
-				"account": callback.Account,
-				"block":   callback.Block,
-				"hash":    callback.Hash,
-				"is_send": "true",
-				"amount":  callback.Amount,
-			}
-			klog.V(3).Infof("Pushing to %d subscribers", len(conns))
-			for _, conn := range conns {
-				// There's a tiny chance this connection was destroyed when we get here, probably not tho
-				if conn != nil {
-					conn.WriteJSON(msg)
-				}
-			}
-		}
-	}
 
 	// Supports push notificaiton
 	if hc.FcmClient == nil {
