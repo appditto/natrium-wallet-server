@@ -255,7 +255,6 @@ func main() {
 				klog.Errorf("Error parsing %s price in cron: %v", currency, err)
 				continue
 			}
-			curFloat = 800.0
 
 			priceMessage := models.PriceMessage{
 				Currency: currency,
