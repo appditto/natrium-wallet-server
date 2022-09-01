@@ -185,7 +185,6 @@ func main() {
 	// Read channel to notify clients of blocks of new blocks
 	go func() {
 		for msg := range callbackChan {
-			klog.V(3).Infof("New block: %s\nLink: %s\n", msg.Hash, msg.Block.LinkAsAccount)
 			// See if they are subscribed
 			conns := wsClientMap.GetConnsForAccount(msg.Block.LinkAsAccount)
 			if len(conns) > 0 {
@@ -197,7 +196,6 @@ func main() {
 						"is_send": "true",
 						"amount":  msg.Amount,
 					}
-					klog.V(3).Infof("Pushing to %d subscribers", len(conns))
 					for _, conn := range conns {
 						// There's a tiny chance this connection was destroyed when we get here, probably not tho
 						if conn != nil {
@@ -249,6 +247,7 @@ func main() {
 				klog.Errorf("Error parsing %s price in cron: %v", currency, err)
 				continue
 			}
+			curFloat = 800.0
 
 			priceMessage := models.PriceMessage{
 				Currency: currency,

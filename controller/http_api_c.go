@@ -303,8 +303,6 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).SendString("ok")
 	}
 
-	klog.V(3).Infof("Received callback for block %s", callback.Hash)
-
 	// Supports push notificaiton
 	if hc.FcmClient == nil {
 		return c.Status(fiber.StatusOK).SendString("ok")
@@ -377,8 +375,6 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 			notificationTitle = fmt.Sprintf("Received %s Nano", strconv.FormatFloat(asBan, 'f', -1, 64))
 		}
 		notificationBody := fmt.Sprintf("Open %s to receive this transaction.", appName)
-
-		klog.V(3).Infof("Prepared to send %s:%s", notificationTitle, notificationBody)
 
 		for _, token := range tokens {
 			// Create the message to be sent.
