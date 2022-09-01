@@ -84,7 +84,7 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 
 	if !slices.Contains(supportedActions, action) {
 		klog.Errorf("Action %s is not supported", action)
-		return c.Status(fiber.StatusBadRequest).JSON(models.UNSUPPORTED_ACTION_ERR)
+		return c.Status(fiber.StatusOK).JSON(models.UNSUPPORTED_ACTION_ERR)
 	}
 
 	// Trim count if it exists in action, so nobody can overload the node
