@@ -1,0 +1,22 @@
+
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: natrium-prices
+spec:
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: natrium-prices
+            image: replaceme
+            command: ["/bin/sh", "-c"]
+            args: ["natrium-server -nano-price-update"]
+            env:
+              - name: REDIS_HOST
+                value: redis.redis
+              - name: REDIS_DB
+                value: "10"
+          restartPolicy: OnFailure

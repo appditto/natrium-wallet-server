@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kalium-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: kalium-server
+  template:
+    metadata:
+      labels:
+        app: kalium-server
+    spec:
+      containers:
+      - name: kalium-server
+        image: replaceme
+        command: ["/bin/sh", "-c"]
+        args: ["natrium-server -banano"]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        ports:
+        - containerPort: 3000
+          name: api
+        env:
+          - name: REDIS_HOST
+            value: redis.redis
+          - name: REDIS_DB
+            value: "15"
+          - name: RPC_URL
+            value: http://10.255.0.1:7072
+          - name: DB_HOST
+            value: postgres.kubegres          
+          - name: DB_PORT
+            value: "5432"
+          - name: DB_SSLMODE
+            value: disable
+          - name: DB_NAME
+            valueFrom:
+              secretKeyRef:
+                name: kalium
+                key: db_name   
+          - name: DB_USER
+            valueFrom:
+              secretKeyRef:
+                name: kalium
+                key: db_user  
+          - name: DB_PASS
+            valueFrom:
+              secretKeyRef:
+                name: kalium
+                key: db_password 
+          - name: FCM_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: kalium
+                key: fcm_api_key
+          - name: BPOW_KEY
+            valueFrom:
+              secretKeyRef:
+                name: kalium
+                key: bpow_key
+          - name: BPOW_URL
+            value: http://boompow-service.boompow-next:8080/graphql 
+          - name: NODE_WS_URL
+            value: ws://10.255.0.1:7074

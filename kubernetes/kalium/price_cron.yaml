@@ -1,0 +1,22 @@
+
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: kalium-prices
+spec:
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: kalium-prices
+            image: replaceme
+            command: ["/bin/sh", "-c"]
+            args: ["natrium-server -banano-price-update"]
+            env:
+              - name: REDIS_HOST
+                value: redis.redis
+              - name: REDIS_DB
+                value: "15"
+          restartPolicy: OnFailure

@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: natrium-server
+  name: kalium-server
   annotations:
     kubernetes.io/ingress.class: "nginx"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
@@ -9,12 +9,12 @@ metadata:
         real_ip_header CF-Connecting-IP;
     nginx.ingress.kubernetes.io/add-base-url: "true"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/websocket-services: "natrium-server"
+    nginx.ingress.kubernetes.io/websocket-services: "kalium-server"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "1800"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
     nginx.ingress.kubernetes.io/upstream-hash-by: $remote_addr
     nginx.ingress.kubernetes.io/affinity: "cookie"
-    nginx.ingress.kubernetes.io/session-cookie-name: "natrium_socket"
+    nginx.ingress.kubernetes.io/session-cookie-name: "kalium_socket"
     nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
     nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
     nginx.ingress.kubernetes.io/server-snippet: |-
@@ -25,16 +25,16 @@ metadata:
 spec:
   tls:
   - hosts:
-    - testapp.natrium.io
-    secretName: testapp-natrium-io-server-secret
+    - testkalium.appditto.com
+    secretName: testapp-kalium-appditto-server-secret
   rules:
-  - host: testapp.natrium.io
+  - host: testkalium.appditto.com
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: natrium-server
+            name: kalium-server
             port:
               number: 3000

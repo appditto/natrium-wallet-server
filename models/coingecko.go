@@ -76,7 +76,7 @@ type CoingeckoResponse struct {
 		PriceChangePercentage60D               float64            `json:"price_change_percentage_60d"`
 		PriceChangePercentage200D              float64            `json:"price_change_percentage_200d"`
 		PriceChangePercentage1Y                float64            `json:"price_change_percentage_1y"`
-		MarketCapChange24H                     int                `json:"market_cap_change_24h"`
+		MarketCapChange24H                     float64            `json:"market_cap_change_24h"`
 		MarketCapChangePercentage24H           float64            `json:"market_cap_change_percentage_24h"`
 		PriceChange24HInCurrency               map[string]float64 `json:"price_change_24h_in_currency"`
 		PriceChangePercentage1HInCurrency      map[string]float64 `json:"price_change_percentage_1h_in_currency"`

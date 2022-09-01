@@ -60,14 +60,35 @@ func main() {
 		}
 		os.Exit(0)
 	} else if *nanoPriceUpdate {
-		err := net.UpdateNanoCoingeckoPrices()
+		// Alse VES and ARS first
+		err := net.UpdateDolarTodayPrice()
+		if err != nil {
+			klog.Errorf("Error updating dolar today price: %v", err)
+			// Not worth breaking the whole flow for VES
+		}
+		err = net.UpdateDolarSiPrice()
+		if err != nil {
+			klog.Errorf("Error updating dolar today price: %v", err)
+			// Not worth breaking the whole flow for VES
+		}
+		err = net.UpdateNanoCoingeckoPrices()
 		if err != nil {
 			klog.Errorf("Error updating nano prices: %v", err)
 			os.Exit(1)
 		}
 		os.Exit(0)
 	} else if *bananoPriceUpdate {
-		err := net.UpdateNanoCoingeckoPrices()
+		err := net.UpdateDolarTodayPrice()
+		if err != nil {
+			klog.Errorf("Error updating dolar today price: %v", err)
+			// Not worth breaking the whole flow for VES
+		}
+		err = net.UpdateDolarSiPrice()
+		if err != nil {
+			klog.Errorf("Error updating dolar today price: %v", err)
+			// Not worth breaking the whole flow for VES
+		}
+		err = net.UpdateNanoCoingeckoPrices()
 		if err != nil {
 			klog.Errorf("Error updating nano prices: %v", err)
 			os.Exit(1)
