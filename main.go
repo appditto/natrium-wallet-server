@@ -180,6 +180,7 @@ func main() {
 	// Read channel to notify clients of blocks of new blocks
 	go func() {
 		for msg := range callbackChan {
+			klog.V(3).Infof("New block: %s\nLink: %s\n", msg.Hash, msg.Block.LinkAsAccount)
 			// See if they are subscribed
 			conns := wsClientMap.GetConnsForAccount(msg.Block.LinkAsAccount)
 			if len(conns) > 0 {
