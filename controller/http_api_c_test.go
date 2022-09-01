@@ -51,7 +51,7 @@ func init() {
 func TestUnsupportedAction(t *testing.T) {
 	// Request JSON
 	reqBody := map[string]interface{}{
-		"action": "break_your_node",
+		"action": "work_generate",
 	}
 	body, _ := json.Marshal(reqBody)
 	// Build request
