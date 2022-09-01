@@ -8,10 +8,10 @@ import (
 )
 
 type WSClient struct {
-	id       uuid.UUID
-	accounts []string // Subscribed accounts
-	currency string
-	conn     *websocket.Conn
+	ID       uuid.UUID
+	Accounts []string // Subscribed accounts
+	Currency string
+	Conn     *websocket.Conn
 }
 
 type WSClientMap struct {
@@ -28,7 +28,7 @@ func NewWSSubscriptions() *WSClientMap {
 // See if element exists
 func (r *WSClientMap) exists(id uuid.UUID) bool {
 	for _, v := range r.subscriptions {
-		if v.id == id {
+		if v.ID == id {
 			return true
 		}
 	}
@@ -37,8 +37,8 @@ func (r *WSClientMap) exists(id uuid.UUID) bool {
 
 func (r *WSClientMap) accountExists(id uuid.UUID, account string) bool {
 	for _, v := range r.subscriptions {
-		if v.id == id {
-			for _, a := range v.accounts {
+		if v.ID == id {
+			for _, a := range v.Accounts {
 				if a == account {
 					return true
 				}
@@ -54,13 +54,20 @@ func (r *WSClientMap) GetConnsForAccount(account string) []*websocket.Conn {
 	defer r.mu.Unlock()
 	var conns []*websocket.Conn
 	for _, v := range r.subscriptions {
-		for _, a := range v.accounts {
+		for _, a := range v.Accounts {
 			if a == account {
-				conns = append(conns, v.conn)
+				conns = append(conns, v.Conn)
 			}
 		}
 	}
 	return conns
+}
+
+// Get accounts
+func (r *WSClientMap) GetAllConns() []WSClient {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.subscriptions
 }
 
 // Get length - synchronized
@@ -74,7 +81,7 @@ func (r *WSClientMap) Len() int {
 func (r *WSClientMap) Put(value WSClient) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if !r.exists(value.id) {
+	if !r.exists(value.ID) {
 		r.subscriptions = append(r.subscriptions, value)
 	}
 }
@@ -85,8 +92,8 @@ func (r *WSClientMap) AddAccount(id uuid.UUID, account string) {
 	defer r.mu.Unlock()
 	if !r.accountExists(id, account) {
 		for i, v := range r.subscriptions {
-			if v.id == id {
-				r.subscriptions[i].accounts = append(r.subscriptions[i].accounts, account)
+			if v.ID == id {
+				r.subscriptions[i].Accounts = append(r.subscriptions[i].Accounts, account)
 			}
 		}
 	}
@@ -96,7 +103,7 @@ func (r *WSClientMap) UpdateCurrency(id uuid.UUID, currency string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.exists(id) {
-		r.subscriptions[r.indexOf(id)].currency = currency
+		r.subscriptions[r.indexOf(id)].Currency = currency
 	}
 }
 
@@ -123,7 +130,7 @@ func (r *WSClientMap) Delete(id uuid.UUID) {
 
 func (r *WSClientMap) indexOf(id uuid.UUID) int {
 	for i, v := range r.subscriptions {
-		if v.id == id {
+		if v.ID == id {
 			return i
 		}
 	}

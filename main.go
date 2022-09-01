@@ -5,14 +5,19 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/appditto/natrium-wallet-server/controller"
 	"github.com/appditto/natrium-wallet-server/database"
 	"github.com/appditto/natrium-wallet-server/gql"
+	"github.com/appditto/natrium-wallet-server/models"
 	"github.com/appditto/natrium-wallet-server/net"
 	"github.com/appditto/natrium-wallet-server/repository"
 	"github.com/appditto/natrium-wallet-server/utils"
 	"github.com/appleboy/go-fcm"
+	"github.com/go-co-op/gocron"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/websocket/v2"
@@ -203,6 +208,61 @@ func main() {
 			}
 		}
 	}()
+
+	// Automatically update connected clients on prices
+	s := gocron.NewScheduler(time.UTC)
+
+	s.Every(60).Seconds().Do(func() {
+		// BTC and Nano price
+		// btc = float(await app['rdata'].hget("prices", f"{price_prefix}-btc"))
+		// if banano_mode:
+		// 		nano = float(await app['rdata'].hget("prices", f"{price_prefix}-nano"))
+		btcPrice, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-btc", pricePrefix))
+		if err != nil {
+			klog.Errorf("Error getting btc price in cron: %v", err)
+			return
+		}
+		btcPriceFloat, err := strconv.ParseFloat(btcPrice, 64)
+		if err != nil {
+			klog.Errorf("Error parsing btc price in cron: %v", err)
+			return
+		}
+		var nanoPriceFloat float64
+		if *bananoMode {
+			nanoPriceStr, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-nano", pricePrefix))
+			if err != nil {
+				klog.Errorf("Error getting nano price in cron: %v", err)
+				return
+			}
+			nanoPriceFloat, err = strconv.ParseFloat(nanoPriceStr, 64)
+		}
+		conns := wsClientMap.GetAllConns()
+		for _, conn := range conns {
+			currency := conn.Currency
+			curStr, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-%s", pricePrefix, strings.ToLower(currency)))
+			if err != nil {
+				klog.Errorf("Error getting %s price in cron: %v", currency, err)
+				continue
+			}
+			curFloat, err := strconv.ParseFloat(curStr, 64)
+			if err != nil {
+				klog.Errorf("Error parsing %s price in cron: %v", currency, err)
+				continue
+			}
+
+			priceMessage := models.PriceMessage{
+				Currency: currency,
+				Price:    curFloat,
+				BtcPrice: btcPriceFloat,
+			}
+			if *bananoMode {
+				priceMessage.NanoPrice = nanoPriceFloat
+			}
+			if conn.Conn != nil {
+				conn.Conn.WriteJSON(priceMessage)
+			}
+		}
+	})
 
 	app.Listen(":3000")
 }

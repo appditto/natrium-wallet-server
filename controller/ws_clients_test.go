@@ -12,10 +12,10 @@ func TestWsClientPut(t *testing.T) {
 	id := uuid.MustParse("12345678-1234-1234-1234-1234567890ab")
 	wsClients := NewWSSubscriptions()
 	wsClients.Put(WSClient{
-		id: id,
+		ID: id,
 	})
 
-	assert.Equal(t, id, wsClients.Get(id).id)
+	assert.Equal(t, id, wsClients.Get(id).ID)
 	assert.Equal(t, 1, wsClients.Len())
 }
 
@@ -24,13 +24,13 @@ func TestWsClientPutOnlyOnce(t *testing.T) {
 	id := uuid.MustParse("12345678-1234-1234-1234-1234567890ab")
 	wsClients := NewWSSubscriptions()
 	wsClients.Put(WSClient{
-		id: id,
+		ID: id,
 	})
 	wsClients.Put(WSClient{
-		id: id,
+		ID: id,
 	})
 
-	assert.Equal(t, id, wsClients.Get(id).id)
+	assert.Equal(t, id, wsClients.Get(id).ID)
 	assert.Equal(t, 1, wsClients.Len())
 }
 
@@ -38,38 +38,38 @@ func TestWsClientAddAccount(t *testing.T) {
 	id := uuid.MustParse("12345678-1234-1234-1234-1234567890ab")
 	wsClients := NewWSSubscriptions()
 	wsClients.Put(WSClient{
-		id: id,
+		ID: id,
 	})
 
 	wsClients.AddAccount(id, "account_1")
 	wsClients.AddAccount(id, "account_2")
 	wsClients.AddAccount(id, "account_2")
-	assert.Equal(t, "account_1", wsClients.Get(id).accounts[0])
-	assert.Equal(t, "account_2", wsClients.Get(id).accounts[1])
-	assert.Equal(t, 2, len(wsClients.Get(id).accounts))
+	assert.Equal(t, "account_1", wsClients.Get(id).Accounts[0])
+	assert.Equal(t, "account_2", wsClients.Get(id).Accounts[1])
+	assert.Equal(t, 2, len(wsClients.Get(id).Accounts))
 }
 
 func TestWsClientUpdateCurrency(t *testing.T) {
 	id := uuid.MustParse("12345678-1234-1234-1234-1234567890ab")
 	wsClients := NewWSSubscriptions()
 	wsClients.Put(WSClient{
-		id: id,
+		ID: id,
 	})
 
 	wsClients.UpdateCurrency(id, "TRY")
-	assert.Equal(t, "TRY", wsClients.Get(id).currency)
+	assert.Equal(t, "TRY", wsClients.Get(id).Currency)
 	wsClients.UpdateCurrency(id, "USD")
-	assert.Equal(t, "USD", wsClients.Get(id).currency)
+	assert.Equal(t, "USD", wsClients.Get(id).Currency)
 }
 
 func TestWsClientDelete(t *testing.T) {
 	id := uuid.MustParse("12345678-1234-1234-1234-1234567890ab")
 	wsClients := NewWSSubscriptions()
 	wsClients.Put(WSClient{
-		id: id,
+		ID: id,
 	})
 
-	assert.Equal(t, id, wsClients.Get(id).id)
+	assert.Equal(t, id, wsClients.Get(id).ID)
 	assert.Equal(t, 1, wsClients.Len())
 
 	wsClients.Delete(id)
@@ -81,7 +81,7 @@ func TestWsClientindexOf(t *testing.T) {
 	id := uuid.MustParse("12345678-1234-1234-1234-1234567890ab")
 	wsClients := NewWSSubscriptions()
 	wsClients.Put(WSClient{
-		id: id,
+		ID: id,
 	})
 
 	assert.Equal(t, 0, wsClients.indexOf(id))
@@ -93,20 +93,20 @@ func TestGetConnsForAccount(t *testing.T) {
 	wsClients := NewWSSubscriptions()
 	conn1 := &websocket.Conn{}
 	wsClients.Put(WSClient{
-		id: id,
-		accounts: []string{
+		ID: id,
+		Accounts: []string{
 			"account_1",
 		},
-		conn: conn1,
+		Conn: conn1,
 	})
 	id2 := uuid.MustParse("22345678-1234-1234-1234-1234567890ab")
 	conn2 := &websocket.Conn{}
 	wsClients.Put(WSClient{
-		id: id2,
-		accounts: []string{
+		ID: id2,
+		Accounts: []string{
 			"account_2",
 		},
-		conn: conn2,
+		Conn: conn2,
 	})
 	conns := wsClients.GetConnsForAccount("account_1")
 	assert.Equal(t, 1, len(conns))
