@@ -141,9 +141,18 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 
 		var jsonBlock bool
 		if _, ok := processRequest["json_block"]; ok {
+			// The node is really dumb with their APIs, it's ambiguous whether it can be a bool or a string
 			jsonBlock, ok = processRequest["json_block"].(bool)
 			if !ok {
-				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+				jsonBlockStr, ok := processRequest["json_block"].(string)
+				if !ok || (jsonBlockStr != "true" && jsonBlockStr != "false") {
+					return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+				}
+				if jsonBlockStr == "true" {
+					jsonBlock = true
+				} else {
+					jsonBlock = false
+				}
 			}
 		}
 
