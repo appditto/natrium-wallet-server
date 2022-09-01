@@ -59,7 +59,7 @@ func TestUnsupportedAction(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, _ := app.Test(req)
-	assert.Equal(t, 400, resp.StatusCode)
+	assert.Equal(t, 200, resp.StatusCode)
 
 	var respJson map[string]interface{}
 	respBody, _ := io.ReadAll(resp.Body)
