@@ -2,6 +2,7 @@ package net
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/signal"
 	"syscall"
@@ -119,6 +120,8 @@ func StartNanoWSClient(wsUrl string, callbackChan *chan *WSCallbackMsg) {
 			// Trigger callback
 			if confMessage.Topic == "confirmation" {
 				var deserialized WSCallbackMsg
+				serialized, _ := json.Marshal(confMessage.Message)
+				klog.V(3).Infof("\n\n%s\n\n", string(serialized))
 				if err := mapstructure.Decode(confMessage.Message, &deserialized); err != nil {
 					klog.Errorf("Error: decoding the callback to WSCallbackMsg %v", err)
 				}
