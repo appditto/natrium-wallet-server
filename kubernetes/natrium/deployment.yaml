@@ -19,9 +19,6 @@ spec:
           requests:
             cpu: 100m
             memory: 200Mi
-          limits:
-            cpu: 500m
-            memory: 1Gi
         ports:
         - containerPort: 3000
           name: api
