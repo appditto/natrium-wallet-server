@@ -9,7 +9,6 @@ import (
 	"time"
 
 	guuid "github.com/google/uuid"
-	"github.com/mitchellh/mapstructure"
 	"github.com/recws-org/recws"
 	"k8s.io/klog/v2"
 )
@@ -120,10 +119,14 @@ func StartNanoWSClient(wsUrl string, callbackChan *chan *WSCallbackMsg) {
 			// Trigger callback
 			if confMessage.Topic == "confirmation" {
 				var deserialized WSCallbackMsg
-				serialized, _ := json.Marshal(confMessage.Message)
-				klog.V(3).Infof("\n\n%s\n\n", string(serialized))
-				if err := mapstructure.Decode(confMessage.Message, &deserialized); err != nil {
+				serialized, err := json.Marshal(confMessage.Message)
+				if err != nil {
+					klog.Infof("Error: Marshal ws %v", err)
+					continue
+				}
+				if err := json.Unmarshal(serialized, &deserialized); err != nil {
 					klog.Errorf("Error: decoding the callback to WSCallbackMsg %v", err)
+					continue
 				}
 				*callbackChan <- &deserialized
 			}
