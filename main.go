@@ -148,9 +148,22 @@ func main() {
 	wsc := controller.WsController{RPCClient: &rpcClient, PricePrefix: pricePrefix, WSClientMap: wsClientMap, BananoMode: *bananoMode, FcmTokenRepo: fcmRepo}
 	hc := controller.HttpController{RPCClient: &rpcClient, BananoMode: *bananoMode, FcmTokenRepo: fcmRepo, WSClientMap: wsClientMap, FcmClient: fcmClient}
 
+	// Cors middleware
+	app.Use(cors.New())
+
 	// HTTP Routes
 	app.Post("/api", hc.HandleAction)
 	app.Post("/callback", hc.HandleHTTPCallback)
+
+	// Alerts
+	app.Get("/alerts/:lang?", func(c *fiber.Ctx) error {
+		lang := c.Params("lang")
+		activeAlert, err := GetActiveAlert(lang)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Unable to retrieve alerts")
+		}
+		return c.Status(fiber.StatusOK).JSON(activeAlert)
+	})
 
 	// Websocket upgrade
 	// HTTP/WS Routes
@@ -167,19 +180,6 @@ func main() {
 	})
 
 	app.Get("/", websocket.New(wsc.HandleWSMessage))
-
-	// Cors middleware
-	app.Use(cors.New())
-
-	// Alerts
-	app.Get("/alerts/:lang?", func(c *fiber.Ctx) error {
-		lang := c.Params("lang")
-		activeAlert, err := GetActiveAlert(lang)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).SendString("Unable to retrieve alerts")
-		}
-		return c.Status(fiber.StatusOK).JSON(activeAlert)
-	})
 
 	// 404 Handler
 	app.Use(func(c *fiber.Ctx) error {
