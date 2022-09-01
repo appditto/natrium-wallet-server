@@ -222,9 +222,6 @@ func main() {
 
 	s.Every(60).Seconds().Do(func() {
 		// BTC and Nano price
-		// btc = float(await app['rdata'].hget("prices", f"{price_prefix}-btc"))
-		// if banano_mode:
-		// 		nano = float(await app['rdata'].hget("prices", f"{price_prefix}-nano"))
 		btcPrice, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-btc", pricePrefix))
 		if err != nil {
 			klog.Errorf("Error getting btc price in cron: %v", err)
@@ -245,6 +242,7 @@ func main() {
 			nanoPriceFloat, err = strconv.ParseFloat(nanoPriceStr, 64)
 		}
 		conns := wsClientMap.GetAllConns()
+		klog.V(3).Infof("Updating %d clients with prices", len(conns))
 		for _, conn := range conns {
 			currency := conn.Currency
 			curStr, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-%s", pricePrefix, strings.ToLower(currency)))
@@ -267,6 +265,7 @@ func main() {
 				priceMessage.NanoPrice = nanoPriceFloat
 			}
 			if conn.Conn != nil {
+				klog.V(3).Infof("Sending price message to %v", conn.Conn.RemoteAddr())
 				conn.Conn.WriteJSON(priceMessage)
 			}
 		}
