@@ -25,10 +25,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - testkalium.appditto.com
+    - kaliumapi.appditto.com
     secretName: testapp-kalium-appditto-server-secret
   rules:
-  - host: testkalium.appditto.com
+  - host: kaliumapi.appditto.com
     http:
       paths:
       - path: /
