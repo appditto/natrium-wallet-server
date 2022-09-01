@@ -94,8 +94,8 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 			klog.Errorf("Error converting count to int %s", err)
 			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
 		}
-		if countAsInt > 3500 || countAsInt < 0 {
-			countAsInt = 3500
+		if countAsInt > 1000 || countAsInt < 0 {
+			countAsInt = 1000
 		}
 		baseRequest["count"] = countAsInt
 	}
