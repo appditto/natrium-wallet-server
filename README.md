@@ -1,4 +1,8 @@
-# Natrium (NANO) and Kalium (BANANO) Wallet Server
+[![Release](https://img.shields.io/github/v/release/appditto/natrium-wallet-server)](https://github.com/appditto/natrium-wallet-server/releases/latest) ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/appditto/natrium-wallet-server) [![License](https://img.shields.io/github/license/appditto/natrium-wallet-server)](https://github.com/appditto/natrium-wallet-server/blob/master/LICENSE) [![CI](https://github.com/appditto/natrium-wallet-server/workflows/CI/badge.svg)](https://github.com/appditto/natrium-wallet-server/actions?query=workflow%3ACI)
+
+# Natrium + Kalium Server
+
+The server that powers the [Natrium](https://natrium.io) and [Kalium](https://kalium.banano.cc) applications.
 
 ## What is Natrium, Kalium, NANO, BANANO?
 
