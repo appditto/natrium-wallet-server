@@ -16,4 +16,6 @@ COPY --from=build /out/natrium-server /bin
 
 EXPOSE 8080
 
+ADD alerts.json .
+
 CMD ["natrium-server"]

@@ -171,6 +171,16 @@ func main() {
 	// Cors middleware
 	app.Use(cors.New())
 
+	// Alerts
+	app.Get("/alerts/:lang?", func(c *fiber.Ctx) error {
+		lang := c.Params("lang")
+		activeAlert, err := GetActiveAlert(lang)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Unable to retrieve alerts")
+		}
+		return c.Status(fiber.StatusOK).JSON(activeAlert)
+	})
+
 	// 404 Handler
 	app.Use(func(c *fiber.Ctx) error {
 		return c.SendStatus(404)
@@ -247,7 +257,6 @@ func main() {
 				klog.Errorf("Error parsing %s price in cron: %v", currency, err)
 				continue
 			}
-			curFloat = 800.0
 
 			priceMessage := models.PriceMessage{
 				Currency: currency,
