@@ -62,6 +62,12 @@ func (client *RPCClient) MakeAccountInfoRequest(account string) (map[string]inte
 	}
 	// Check that it's ok
 	if _, ok := responseMap["frontier"]; !ok {
+		if _, ok := responseMap["error"]; ok {
+			if responseMap["error"].(string) == "Account not found" {
+				// This response is ok, unopened account
+				return responseMap, nil
+			}
+		}
 		klog.Errorf("Error in account_info response %s", err)
 		return nil, err
 	}

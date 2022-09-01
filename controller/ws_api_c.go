@@ -102,7 +102,7 @@ func (wc *WsController) HandleWSMessage(c *websocket.Conn) {
 
 			// Get account info
 			accountInfo, err := wc.RPCClient.MakeAccountInfoRequest(subscribeRequest.Account)
-			if err != nil {
+			if err != nil || accountInfo == nil {
 				klog.Errorf("Error getting account info %v", err)
 				c.WriteMessage(mt, []byte("{\"error\":\"subscribe error\"}"))
 				continue

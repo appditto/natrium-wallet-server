@@ -190,8 +190,11 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 					"error": "Error making account info request",
 				})
 			}
-			if strings.ToLower(fmt.Sprintf("%s", accountInfo["frontier"])) != strings.ToLower(processRequest.JsonBlock.Previous) {
-				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			if _, ok := accountInfo["error"]; !ok {
+				// Account is opened
+				if strings.ToLower(fmt.Sprintf("%s", accountInfo["frontier"])) != strings.ToLower(processRequest.JsonBlock.Previous) {
+					return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+				}
 			}
 		}
 
