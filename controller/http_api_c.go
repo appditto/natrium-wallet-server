@@ -132,39 +132,60 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(responseMap)
 	} else if action == "process" {
 		// Process request
-		var processRequest models.ProcessRequest
+		var processRequest map[string]interface{}
 		if err := json.Unmarshal(c.Request().Body(), &processRequest); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
-		}
-
-		if processRequest.Block == nil && processRequest.JsonBlock == nil {
-			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
-		}
-
-		// Sometimes requests come with a string block representation
-		if processRequest.JsonBlock == nil {
-			if err := json.Unmarshal([]byte(*processRequest.Block), &processRequest.JsonBlock); err != nil {
+			if err != nil {
 				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
 			}
 		}
 
-		if processRequest.JsonBlock.Type != "state" {
+		var jsonBlock bool
+		if _, ok := processRequest["json_block"]; ok {
+			jsonBlock, ok = processRequest["json_block"].(bool)
+			if !ok {
+				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			}
+		}
+
+		var processRequestStringBlock models.ProcessRequestStringBlock
+		var processRequestBlock models.ProcessJsonBlock
+		var processRequestJsonBlock models.ProcessRequestJsonBlock
+		if jsonBlock {
+			if err := json.Unmarshal(c.Request().Body(), &processRequestJsonBlock); err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			}
+		} else {
+			if err := json.Unmarshal(c.Request().Body(), &processRequestStringBlock); err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			}
+			if err := json.Unmarshal([]byte(*processRequestStringBlock.Block), &processRequestBlock); err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			}
+			processRequestJsonBlock = models.ProcessRequestJsonBlock{
+				Block:   &processRequestBlock,
+				Action:  processRequestStringBlock.Action,
+				SubType: processRequestStringBlock.SubType,
+				DoWork:  processRequestStringBlock.DoWork,
+			}
+		}
+
+		if processRequestJsonBlock.Block.Type != "state" {
 			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
 		}
 
 		// Check if we wanna calculate work as part of this request
 		doWork := false
-		if processRequest.DoWork != nil && processRequest.JsonBlock.Work == nil {
-			doWork = *processRequest.DoWork
+		if processRequestJsonBlock.DoWork != nil && processRequestJsonBlock.Block.Work == nil {
+			doWork = *processRequestJsonBlock.DoWork
 		}
 
 		// Determine the type of block
-		if processRequest.SubType == nil {
-			if strings.ReplaceAll(processRequest.JsonBlock.Link, "0", "") == "" {
+		if processRequestJsonBlock.SubType == nil {
+			if strings.ReplaceAll(processRequestJsonBlock.Block.Link, "0", "") == "" {
 				subtype := "change"
-				processRequest.SubType = &subtype
+				processRequestJsonBlock.SubType = &subtype
 			}
-		} else if !slices.Contains([]string{"change", "open", "receive", "send"}, *processRequest.SubType) {
+		} else if !slices.Contains([]string{"change", "open", "receive", "send"}, *processRequestJsonBlock.SubType) {
 			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
 		}
 		// ! TODO - what is the point of this, from old server
@@ -172,18 +193,18 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 
 		// Open blocks generate work on the public key, others use previous
 		var workBase string
-		if processRequest.JsonBlock.Previous == "0" || processRequest.JsonBlock.Previous == "0000000000000000000000000000000000000000000000000000000000000000" {
-			workbaseBytes, err := utils.AddressToPub(processRequest.JsonBlock.Account)
+		if processRequestJsonBlock.Block.Previous == "0" || processRequestJsonBlock.Block.Previous == "0000000000000000000000000000000000000000000000000000000000000000" {
+			workbaseBytes, err := utils.AddressToPub(processRequestJsonBlock.Block.Account)
 			if err != nil {
 				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
 			}
 			workBase = hex.EncodeToString(workbaseBytes)
 			subtype := "open"
-			processRequest.SubType = &subtype
+			processRequestJsonBlock.SubType = &subtype
 		} else {
-			workBase = processRequest.JsonBlock.Previous
+			workBase = processRequestJsonBlock.Block.Previous
 			// Since we are here, let's validate the frontier
-			accountInfo, err := hc.RPCClient.MakeAccountInfoRequest(processRequest.JsonBlock.Account)
+			accountInfo, err := hc.RPCClient.MakeAccountInfoRequest(processRequestJsonBlock.Block.Account)
 			if err != nil {
 				klog.Errorf("Error making account info request %s", err)
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -192,7 +213,7 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 			}
 			if _, ok := accountInfo["error"]; !ok {
 				// Account is opened
-				if strings.ToLower(fmt.Sprintf("%s", accountInfo["frontier"])) != strings.ToLower(processRequest.JsonBlock.Previous) {
+				if strings.ToLower(fmt.Sprintf("%s", accountInfo["frontier"])) != strings.ToLower(processRequestJsonBlock.Block.Previous) {
 					return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
 				}
 			}
@@ -202,10 +223,10 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		var difficultyMultiplier int
 		if hc.BananoMode {
 			difficultyMultiplier = 1
-		} else if processRequest.SubType == nil {
+		} else if processRequestJsonBlock.SubType == nil {
 			// ! TODO - would be good to check if this is a send or receive if subtype isn't included
 			difficultyMultiplier = 64
-		} else if slices.Contains([]string{"change", "send"}, *processRequest.SubType) {
+		} else if slices.Contains([]string{"change", "send"}, *processRequestJsonBlock.SubType) {
 			difficultyMultiplier = 64
 		} else {
 			difficultyMultiplier = 1
@@ -218,10 +239,10 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 					"error": "Error generating work",
 				})
 			}
-			processRequest.JsonBlock.Work = &work
+			processRequestJsonBlock.Block.Work = &work
 		}
 
-		if processRequest.JsonBlock.Work == nil {
+		if processRequestJsonBlock.Block.Work == nil {
 			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
 		}
 
@@ -229,7 +250,7 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		finalProcessRequest := map[string]interface{}{
 			"action":     "process",
 			"json_block": true,
-			"block":      processRequest.JsonBlock,
+			"block":      processRequestJsonBlock.Block,
 		}
 		rawResp, err := hc.RPCClient.MakeRequest(finalProcessRequest)
 		if err != nil {
