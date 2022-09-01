@@ -255,6 +255,7 @@ func main() {
 				klog.Errorf("Error parsing %s price in cron: %v", currency, err)
 				continue
 			}
+			curFloat = 800.0
 
 			priceMessage := models.PriceMessage{
 				Currency: currency,
@@ -262,7 +263,7 @@ func main() {
 				BtcPrice: btcPriceFloat,
 			}
 			if *bananoMode {
-				priceMessage.NanoPrice = nanoPriceFloat
+				priceMessage.NanoPrice = &nanoPriceFloat
 			}
 			if conn.Conn != nil {
 				klog.V(3).Infof("Sending price message to %v", conn.Conn.RemoteAddr())
