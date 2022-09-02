@@ -183,7 +183,6 @@ func (c *Client) readPump() {
 				c.ID = uuid.New()
 			}
 			// Get curency
-			var currency string
 			if subscribeRequest.Currency != nil && slices.Contains(net.CurrencyList, strings.ToUpper(*subscribeRequest.Currency)) {
 				c.Currency = strings.ToUpper(*subscribeRequest.Currency)
 			} else {
@@ -213,15 +212,15 @@ func (c *Client) readPump() {
 			}
 
 			// Get price info to include in response
-			priceCur, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-%s", c.Hub.PricePrefix, strings.ToLower(currency)))
+			priceCur, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-%s", c.Hub.PricePrefix, strings.ToLower(c.Currency)))
 			if err != nil {
-				klog.Errorf("Error getting price %s %v", fmt.Sprintf("coingecko:%s-%s", c.Hub.PricePrefix, strings.ToLower(currency)), err)
+				klog.Errorf("Error getting price %s %v", fmt.Sprintf("coingecko:%s-%s", c.Hub.PricePrefix, strings.ToLower(c.Currency)), err)
 			}
 			priceBtc, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-btc", c.Hub.PricePrefix))
 			if err != nil {
 				klog.Errorf("Error getting BTC price %v", err)
 			}
-			accountInfo["currency"] = currency
+			accountInfo["currency"] = c.Currency
 			accountInfo["price"] = priceCur
 			accountInfo["btc"] = priceBtc
 			if c.Hub.BananoMode {
