@@ -23,6 +23,11 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
 	"github.com/go-co-op/gocron"
+	socketio "github.com/googollee/go-socket.io"
+	"github.com/googollee/go-socket.io/engineio"
+	"github.com/googollee/go-socket.io/engineio/transport"
+	"github.com/googollee/go-socket.io/engineio/transport/polling"
+	"github.com/googollee/go-socket.io/engineio/transport/websocket"
 	"k8s.io/klog/v2"
 )
 
@@ -48,6 +53,7 @@ func main() {
 	nanoPriceUpdate := flag.Bool("nano-price-update", false, "Update nano prices")
 	bananoPriceUpdate := flag.Bool("banano-price-update", false, "Update banano prices")
 	bananoMode := flag.Bool("banano", false, "Run in BANANO mode (Kalium)")
+	socketIoServer := flag.Bool("socket-io", false, "Run socket.io server (natrium.io/donate)")
 	version := flag.Bool("version", false, "Display the version")
 	flag.Parse()
 
@@ -225,6 +231,33 @@ func main() {
 		controller.WebsocketChl(wsHub, w, r)
 	})
 
+	var sio *socketio.Server
+	if *socketIoServer {
+		// Socket.io endpoint is only for natrium.io/donate
+		sio = socketio.NewServer(&engineio.Options{
+			Transports: []transport.Transport{
+				&polling.Transport{
+					CheckOrigin: func(r *http.Request) bool {
+						return true
+					},
+				},
+				&websocket.Transport{
+					CheckOrigin: func(r *http.Request) bool {
+						return true
+					},
+				},
+			},
+		})
+		go func() {
+			if err := sio.Serve(); err != nil {
+				klog.Errorf("socketio listen error: %s\n", err)
+			}
+		}()
+		defer sio.Close()
+
+		app.Handle("/socket.io/", sio)
+	}
+
 	// Start nano WS client
 	callbackChan := make(chan *net.WSCallbackMsg, 100)
 	if utils.GetEnv("NODE_WS_URL", "") != "" {
@@ -256,6 +289,15 @@ func main() {
 					if account == msg.Block.LinkAsAccount {
 						client.Send <- serialized
 					}
+				}
+			}
+
+			// for socket.io
+			if sio != nil {
+				if msg.Block.LinkAsAccount == "nano_1natrium1o3z5519ifou7xii8crpxpk8y65qmkih8e8bpsjri651oza8imdd" && msg.Block.Subtype == "send" && msg.Amount != "" {
+					sio.BroadcastToNamespace("/", "donation_event", map[string]interface{}{
+						"amount": msg.Amount,
+					})
 				}
 			}
 		}

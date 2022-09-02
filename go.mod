@@ -17,6 +17,9 @@ require (
 require (
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/gofrs/uuid v4.0.0+incompatible // indirect
+	github.com/gomodule/redigo v2.0.0+incompatible // indirect
+	github.com/googollee/go-socket.io v1.6.2 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.12.1 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
@@ -48,6 +51,7 @@ require (
 	github.com/go-chi/render v1.0.2
 	github.com/go-co-op/gocron v1.17.0
 	github.com/go-logr/logr v1.2.3 // indirect
+	github.com/googollee/go-engine.io v1.4.2
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/klauspost/compress v1.15.9 // indirect
