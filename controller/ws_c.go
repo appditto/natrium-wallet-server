@@ -156,6 +156,7 @@ func (c *Client) readPump() {
 		}
 
 		if _, ok := baseRequest["action"]; !ok {
+			klog.Errorf("Action not present in request %s", err)
 			errJson, _ := json.Marshal(InvalidRequestError)
 			c.Send <- errJson
 			continue
@@ -164,6 +165,7 @@ func (c *Client) readPump() {
 		if baseRequest["action"] == "account_subscribe" {
 			var subscribeRequest models.AccountSubscribe
 			if err = mapstructure.Decode(msg, &subscribeRequest); err != nil {
+				klog.Errorf("Error unmarshalling websocket subscribe request %s", err)
 				errJson, _ := json.Marshal(InvalidRequestError)
 				c.Send <- errJson
 				continue
@@ -263,6 +265,7 @@ func (c *Client) readPump() {
 			// Update FCM/notification preferences
 			var fcmUpdateRequest models.FcmUpdate
 			if err = mapstructure.Decode(msg, &fcmUpdateRequest); err != nil {
+				klog.Errorf("Error unmarshalling websocket fcm_update request %s", err)
 				errJson, _ := json.Marshal(InvalidRequestError)
 				c.Send <- errJson
 				continue
@@ -281,6 +284,7 @@ func (c *Client) readPump() {
 				c.Hub.FcmTokenRepo.AddOrUpdateToken(fcmUpdateRequest.FcmToken, fcmUpdateRequest.Account)
 			}
 		} else {
+			klog.Errorf("Unknown websocket request %s", msg)
 			errJson, _ := json.Marshal(InvalidRequestError)
 			c.Send <- errJson
 			continue
