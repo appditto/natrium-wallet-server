@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/gofiber/websocket/v2"
@@ -49,14 +50,14 @@ func (r *WSClientMap) accountExists(id uuid.UUID, account string) bool {
 }
 
 // Get accounts
-func (r *WSClientMap) GetConnsForAccount(account string) []*websocket.Conn {
+func (r *WSClientMap) GetConnsForAccount(account string) []WSClient {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	var conns []*websocket.Conn
+	var conns []WSClient
 	for _, v := range r.subscriptions {
 		for _, a := range v.Accounts {
 			if a == account {
-				conns = append(conns, v.Conn)
+				conns = append(conns, v)
 			}
 		}
 	}
@@ -141,4 +142,19 @@ func (r *WSClientMap) indexOf(id uuid.UUID) int {
 func remove(s []WSClient, i int) []WSClient {
 	s[i] = s[len(s)-1]
 	return s[:len(s)-1]
+}
+
+// It's possible that another goroutine closes connections, so we may get nil dereferences when writing from other threads
+// Catch the panic
+func (r *WSClientMap) WriteJsonSafe(conn WSClient, msg interface{}) (err error) {
+	defer func() {
+		// recover from panic if one occured. Set err to nil otherwise.
+		if recover() != nil {
+			err = fmt.Errorf("%v", r)
+			return
+		}
+	}()
+
+	conn.Conn.WriteJSON(msg)
+	return err
 }

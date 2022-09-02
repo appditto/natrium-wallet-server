@@ -236,10 +236,7 @@ func main() {
 						"amount":  msg.Amount,
 					}
 					for _, conn := range conns {
-						// There's a tiny chance this connection was destroyed when we get here, probably not tho
-						if conn != nil {
-							conn.WriteJSON(msg)
-						}
+						wsClientMap.WriteJsonSafe(conn, msg)
 					}
 				}
 			}
@@ -294,8 +291,7 @@ func main() {
 				priceMessage.NanoPrice = &nanoPriceFloat
 			}
 			if conn.Conn != nil {
-				klog.V(3).Infof("Sending price message to %v", conn.Conn.RemoteAddr())
-				conn.Conn.WriteJSON(priceMessage)
+				wsClientMap.WriteJsonSafe(conn, priceMessage)
 			}
 		}
 	})
