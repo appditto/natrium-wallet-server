@@ -156,7 +156,6 @@ func (c *Client) readPump() {
 		}
 
 		if _, ok := baseRequest["action"]; !ok {
-			klog.Errorf("Action not present in request %s", err)
 			errJson, _ := json.Marshal(InvalidRequestError)
 			c.Send <- errJson
 			continue
@@ -164,8 +163,7 @@ func (c *Client) readPump() {
 
 		if baseRequest["action"] == "account_subscribe" {
 			var subscribeRequest models.AccountSubscribe
-			if err = mapstructure.Decode(msg, &subscribeRequest); err != nil {
-				klog.Errorf("Error unmarshalling websocket subscribe request %s", err)
+			if err = mapstructure.Decode(baseRequest, &subscribeRequest); err != nil {
 				errJson, _ := json.Marshal(InvalidRequestError)
 				c.Send <- errJson
 				continue
@@ -184,13 +182,12 @@ func (c *Client) readPump() {
 				// Create a UUID for this subscription
 				c.ID = uuid.New()
 			}
-			c.Accounts = []string{}
-			c.Currency = "usd"
-
 			// Get curency
 			var currency string
-			if subscribeRequest.Currency != nil && slices.Contains(net.CurrencyList, *subscribeRequest.Currency) {
-				c.Currency = *subscribeRequest.Currency
+			if subscribeRequest.Currency != nil && slices.Contains(net.CurrencyList, strings.ToUpper(*subscribeRequest.Currency)) {
+				c.Currency = strings.ToUpper(*subscribeRequest.Currency)
+			} else {
+				c.Currency = "USD"
 			}
 			// Force nano_ address
 			if !c.Hub.BananoMode {
@@ -211,7 +208,9 @@ func (c *Client) readPump() {
 			}
 
 			// Add account to tracker
-			c.Accounts = append(c.Accounts, subscribeRequest.Account)
+			if !slices.Contains(c.Accounts, subscribeRequest.Account) {
+				c.Accounts = append(c.Accounts, subscribeRequest.Account)
+			}
 
 			// Get price info to include in response
 			priceCur, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-%s", c.Hub.PricePrefix, strings.ToLower(currency)))
@@ -264,7 +263,7 @@ func (c *Client) readPump() {
 		} else if baseRequest["action"] == "fcm_update" {
 			// Update FCM/notification preferences
 			var fcmUpdateRequest models.FcmUpdate
-			if err = mapstructure.Decode(msg, &fcmUpdateRequest); err != nil {
+			if err = mapstructure.Decode(baseRequest, &fcmUpdateRequest); err != nil {
 				klog.Errorf("Error unmarshalling websocket fcm_update request %s", err)
 				errJson, _ := json.Marshal(InvalidRequestError)
 				c.Send <- errJson
@@ -347,7 +346,7 @@ func WebsocketChl(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		klog.Error(err)
 		return
 	}
-	client := &Client{Hub: hub, Conn: conn, Send: make(chan []byte, 256), IPAddress: clientIP}
+	client := &Client{Hub: hub, Conn: conn, Send: make(chan []byte, 256), IPAddress: clientIP, Accounts: []string{}}
 	client.Hub.Register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in
