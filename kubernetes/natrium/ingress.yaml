@@ -2,11 +2,44 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: natrium-server
+  namespace: natrium
   annotations:
     kubernetes.io/ingress.class: "nginx"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/configuration-snippet: |
         real_ip_header CF-Connecting-IP;
+        location /callback {
+            deny all;
+            return 404;
+        }
+        # Run ~/scripts/cf_ips.sh to update this list
+        # https://www.cloudflare.com/ips
+        # IPv4
+        allow 173.245.48.0/20;
+        allow 103.21.244.0/22;
+        allow 103.22.200.0/22;
+        allow 103.31.4.0/22;
+        allow 141.101.64.0/18;
+        allow 108.162.192.0/18;
+        allow 190.93.240.0/20;
+        allow 188.114.96.0/20;
+        allow 197.234.240.0/22;
+        allow 198.41.128.0/17;
+        allow 162.158.0.0/15;
+        allow 104.16.0.0/13;
+        allow 104.24.0.0/14;
+        allow 172.64.0.0/13;
+        allow 131.0.72.0/22;
+        # IPv6
+        allow 2400:cb00::/32;
+        allow 2606:4700::/32;
+        allow 2803:f800::/32;
+        allow 2405:b500::/32;
+        allow 2405:8100::/32;
+        allow 2a06:98c0::/29;
+        allow 2c0f:f248::/32;
+        # Generated at Fri Sep  2 16:37:59 EDT 2022
+        deny all; # deny all remaining ips
     nginx.ingress.kubernetes.io/add-base-url: "true"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/websocket-services: "natrium-server"
@@ -17,11 +50,6 @@ metadata:
     nginx.ingress.kubernetes.io/session-cookie-name: "natrium_socket"
     nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
     nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
-    nginx.ingress.kubernetes.io/server-snippet: |-
-      location /callback {
-          deny all;
-          return 404;
-      }
 spec:
   tls:
   - hosts:
