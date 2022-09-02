@@ -25,10 +25,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - testapp.natrium.io
-    secretName: testapp-natrium-io-server-secret
+    - app.natrium.io
+    secretName: app-natrium-io-server-secret
   rules:
-  - host: testapp.natrium.io
+  - host: app.natrium.io
     http:
       paths:
       - path: /
