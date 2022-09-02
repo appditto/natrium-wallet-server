@@ -109,12 +109,14 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 		// Retrieve account history
 		var accountHistory models.AccountHistory
 		if err := json.NewDecoder(r.Body).Decode(&accountHistory); err != nil {
+			klog.Errorf("Error unmarshalling http account history request %s", err)
 			ErrInvalidRequest(w, r)
 			return
 		}
 
 		// Check if account is valid
 		if !utils.ValidateAddress(accountHistory.Account, hc.BananoMode) {
+			klog.Errorf("Invalid account %s", accountHistory.Account)
 			ErrInvalidRequest(w, r)
 			return
 		}
@@ -375,14 +377,13 @@ func (hc *HttpController) HandleHTTPCallback(w http.ResponseWriter, r *http.Requ
 	curBalance := big.NewInt(0)
 	curBalance, ok := curBalance.SetString(callbackBlock.Balance, 10)
 	if !ok {
-		klog.Error("Error settingcur balance")
+		klog.Error("Error setting cur balance")
 		render.Status(r, http.StatusOK)
 		return
 	}
 	prevBalance := big.NewInt(0)
 	prevBalance, ok = prevBalance.SetString(previous.Contents.Balance, 10)
 	if !ok {
-		klog.Error("Error setting prev balance")
 		render.Status(r, http.StatusOK)
 		return
 	}
