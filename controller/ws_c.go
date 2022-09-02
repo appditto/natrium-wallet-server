@@ -164,12 +164,14 @@ func (c *Client) readPump() {
 		if baseRequest["action"] == "account_subscribe" {
 			var subscribeRequest models.AccountSubscribe
 			if err = mapstructure.Decode(baseRequest, &subscribeRequest); err != nil {
+				klog.Errorf("Error unmarshalling websocket subscribe request %s", err)
 				errJson, _ := json.Marshal(InvalidRequestError)
 				c.Send <- errJson
 				continue
 			}
 			// Check if account is valid
 			if !utils.ValidateAddress(subscribeRequest.Account, c.Hub.BananoMode) {
+				klog.Errorf("Invalid account %s , %v", subscribeRequest.Account, c.Hub.BananoMode)
 				c.Send <- []byte("{\"error\":\"Invalid account\"}")
 				continue
 			}
