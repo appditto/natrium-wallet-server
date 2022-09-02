@@ -20,6 +20,7 @@ import (
 	"github.com/go-co-op/gocron"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/pprof"
 	"github.com/gofiber/websocket/v2"
 	"k8s.io/klog/v2"
 )
@@ -179,6 +180,8 @@ func main() {
 
 	// Cors middleware
 	app.Use(cors.New())
+	// Pprof
+	app.Use(pprof.New())
 
 	// HTTP Routes
 	app.Post("/api", hc.HandleAction)
