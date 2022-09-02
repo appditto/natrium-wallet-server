@@ -248,6 +248,11 @@ func main() {
 				},
 			},
 		})
+		sio.OnConnect("/", func(s socketio.Conn) error {
+			s.SetContext("")
+			klog.Infof("socket.io client connected:", s.ID())
+			return nil
+		})
 		go func() {
 			if err := sio.Serve(); err != nil {
 				klog.Errorf("socketio listen error: %s\n", err)
