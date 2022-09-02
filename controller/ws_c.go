@@ -179,7 +179,12 @@ func (c *Client) readPump() {
 			// Handle subscribe
 			// If UUID is present and valid, use that, otherwise generate a new one
 			if subscribeRequest.Uuid != nil {
-				c.ID = *subscribeRequest.Uuid
+				id, err := uuid.Parse(*subscribeRequest.Uuid)
+				if err != nil {
+					c.ID = uuid.New()
+				} else {
+					c.ID = id
+				}
 			} else {
 				// Create a UUID for this subscription
 				c.ID = uuid.New()
@@ -222,6 +227,7 @@ func (c *Client) readPump() {
 			if err != nil {
 				klog.Errorf("Error getting BTC price %v", err)
 			}
+			accountInfo["uuid"] = c.ID
 			accountInfo["currency"] = c.Currency
 			accountInfo["price"] = priceCur
 			accountInfo["btc"] = priceBtc
