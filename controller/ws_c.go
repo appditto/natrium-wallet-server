@@ -15,6 +15,7 @@ import (
 	"github.com/appditto/natrium-wallet-server/utils"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/mitchellh/mapstructure"
 	"golang.org/x/exp/slices"
 	"k8s.io/klog/v2"
 )
@@ -146,7 +147,7 @@ func (c *Client) readPump() {
 
 		// Process message
 		// Determine type of message and unMarshal
-		var baseRequest models.BaseRequest
+		var baseRequest map[string]interface{}
 		if err = json.Unmarshal(msg, &baseRequest); err != nil {
 			klog.Errorf("Error unmarshalling websocket base request %s", err)
 			errJson, _ := json.Marshal(InvalidRequestError)
@@ -154,9 +155,15 @@ func (c *Client) readPump() {
 			continue
 		}
 
-		if baseRequest.Action == "account_subscribe" {
+		if _, ok := baseRequest["action"]; !ok {
+			errJson, _ := json.Marshal(InvalidRequestError)
+			c.Send <- errJson
+			continue
+		}
+
+		if baseRequest["action"] == "account_subscribe" {
 			var subscribeRequest models.AccountSubscribe
-			if err = json.Unmarshal(msg, &subscribeRequest); err != nil {
+			if err = mapstructure.Decode(msg, &subscribeRequest); err != nil {
 				errJson, _ := json.Marshal(InvalidRequestError)
 				c.Send <- errJson
 				continue
@@ -207,7 +214,7 @@ func (c *Client) readPump() {
 			// Get price info to include in response
 			priceCur, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-%s", c.Hub.PricePrefix, strings.ToLower(currency)))
 			if err != nil {
-				klog.Errorf("Error getting price %v", err)
+				klog.Errorf("Error getting price %s %v", fmt.Sprintf("coingecko:%s-%s", c.Hub.PricePrefix, strings.ToLower(currency)), err)
 			}
 			priceBtc, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-btc", c.Hub.PricePrefix))
 			if err != nil {
@@ -252,10 +259,10 @@ func (c *Client) readPump() {
 				// Add/update token if not exists
 				c.Hub.FcmTokenRepo.AddOrUpdateToken(subscribeRequest.FcmToken, subscribeRequest.Account)
 			}
-		} else if baseRequest.Action == "fcm_update" {
+		} else if baseRequest["action"] == "fcm_update" {
 			// Update FCM/notification preferences
 			var fcmUpdateRequest models.FcmUpdate
-			if err = json.Unmarshal(msg, &fcmUpdateRequest); err != nil {
+			if err = mapstructure.Decode(msg, &fcmUpdateRequest); err != nil {
 				errJson, _ := json.Marshal(InvalidRequestError)
 				c.Send <- errJson
 				continue
