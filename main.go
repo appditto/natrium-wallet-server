@@ -2,8 +2,10 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -17,11 +19,10 @@ import (
 	"github.com/appditto/natrium-wallet-server/repository"
 	"github.com/appditto/natrium-wallet-server/utils"
 	"github.com/appleboy/go-fcm"
+	"github.com/go-chi/chi"
+	"github.com/go-chi/cors"
+	"github.com/go-chi/render"
 	"github.com/go-co-op/gocron"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/pprof"
-	"github.com/gofiber/websocket/v2"
 	"k8s.io/klog/v2"
 )
 
@@ -133,7 +134,7 @@ func main() {
 	}
 
 	// Create app
-	app := fiber.New()
+	app := chi.NewRouter()
 
 	// BPoW if applicable
 	var bpowClient *gql.BpowClient
@@ -174,48 +175,54 @@ func main() {
 	if *bananoMode {
 		pricePrefix = "banano"
 	}
-	wsClientMap := controller.NewWSSubscriptions()
-	wsc := controller.WsController{RPCClient: &rpcClient, PricePrefix: pricePrefix, WSClientMap: wsClientMap, BananoMode: *bananoMode, FcmTokenRepo: fcmRepo}
-	hc := controller.HttpController{RPCClient: &rpcClient, BananoMode: *bananoMode, FcmTokenRepo: fcmRepo, WSClientMap: wsClientMap, FcmClient: fcmClient}
+	hc := controller.HttpController{RPCClient: &rpcClient, BananoMode: *bananoMode, FcmTokenRepo: fcmRepo, FcmClient: fcmClient}
 
 	// Cors middleware
-	app.Use(cors.New())
+	app.Use(cors.Handler(cors.Options{
+		// AllowedOrigins:   []string{"https://foo.com"}, // Use this to allow specific origin hosts
+		//AllowedOrigins:   []string{"*"},
+		AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300, // Maximum value not ignored by any of major browsers
+	}))
 	// Pprof
-	app.Use(pprof.New())
+	// app.Use(pprof.New())
 
 	// HTTP Routes
 	app.Post("/api", hc.HandleAction)
 	app.Post("/callback", hc.HandleHTTPCallback)
 
 	// Alerts
-	app.Get("/alerts/:lang?", func(c *fiber.Ctx) error {
-		lang := c.Params("lang")
-		activeAlert, err := GetActiveAlert(lang)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).SendString("Unable to retrieve alerts")
-		}
-		return c.Status(fiber.StatusOK).JSON(activeAlert)
+	app.Route("/alerts", func(r chi.Router) {
+		r.Get("/{lang}", func(w http.ResponseWriter, r *http.Request) {
+			lang := chi.URLParam(r, "lang")
+			activeAlert, err := GetActiveAlert(lang)
+			if err != nil {
+				controller.ErrInternalServerError(w, r, "Unable to retrieve alerts")
+				return
+			}
+			render.Status(r, http.StatusOK)
+			render.JSON(w, r, activeAlert)
+		})
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			activeAlert, err := GetActiveAlert("en")
+			if err != nil {
+				controller.ErrInternalServerError(w, r, "Unable to retrieve alerts")
+				return
+			}
+			render.Status(r, http.StatusOK)
+			render.JSON(w, r, activeAlert)
+		})
 	})
 
-	// Websocket upgrade
-	// HTTP/WS Routes
-	app.Use("/", func(c *fiber.Ctx) error {
-		// Get IP Address
-		c.Locals("ip", utils.IPAddress(c))
-		// IsWebSocketUpgrade returns true if the client
-		// requested upgrade to the WebSocket protocol.
-		if websocket.IsWebSocketUpgrade(c) {
-			c.Locals("allowed", true)
-			return c.Next()
-		}
-		return fiber.ErrUpgradeRequired
-	})
-
-	app.Get("/", websocket.New(wsc.HandleWSMessage))
-
-	// 404 Handler
-	app.Use(func(c *fiber.Ctx) error {
-		return c.SendStatus(404)
+	// Setup WS endpoint
+	wsHub := controller.NewHub(*bananoMode, &rpcClient, fcmRepo)
+	go wsHub.Run()
+	app.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		controller.WebsocketChl(wsHub, w, r)
 	})
 
 	// Start nano WS client
@@ -227,19 +234,27 @@ func main() {
 	// Read channel to notify clients of blocks of new blocks
 	go func() {
 		for msg := range callbackChan {
+			if msg.Block.Subtype != "send" {
+				continue
+			}
+			callbackMsg := map[string]interface{}{
+				"account": msg.Account,
+				"block":   msg.Block,
+				"hash":    msg.Hash,
+				"is_send": "true",
+				"amount":  msg.Amount,
+			}
+			serialized, err := json.Marshal(callbackMsg)
+			if err != nil {
+				klog.Errorf("Error serializing callback message: %v", err)
+				continue
+			}
+
 			// See if they are subscribed
-			conns := wsClientMap.GetConnsForAccount(msg.Block.LinkAsAccount)
-			if len(conns) > 0 {
-				if msg.Block.Subtype == "send" {
-					msg := map[string]interface{}{
-						"account": msg.Account,
-						"block":   msg.Block,
-						"hash":    msg.Hash,
-						"is_send": "true",
-						"amount":  msg.Amount,
-					}
-					for _, conn := range conns {
-						wsClientMap.WriteJsonSafe(conn, msg)
+			for client, _ := range wsHub.Clients {
+				for _, account := range client.Accounts {
+					if account == msg.Block.LinkAsAccount {
+						client.Send <- serialized
 					}
 				}
 			}
@@ -270,10 +285,8 @@ func main() {
 			}
 			nanoPriceFloat, err = strconv.ParseFloat(nanoPriceStr, 64)
 		}
-		conns := wsClientMap.GetAllConns()
-		klog.V(3).Infof("Updating %d clients with prices", len(conns))
-		for _, conn := range conns {
-			currency := conn.Currency
+		for client, _ := range wsHub.Clients {
+			currency := client.Currency
 			curStr, err := database.GetRedisDB().Hget("prices", fmt.Sprintf("coingecko:%s-%s", pricePrefix, strings.ToLower(currency)))
 			if err != nil {
 				klog.Errorf("Error getting %s price in cron: %v", currency, err)
@@ -284,7 +297,6 @@ func main() {
 				klog.Errorf("Error parsing %s price in cron: %v", currency, err)
 				continue
 			}
-
 			priceMessage := models.PriceMessage{
 				Currency: currency,
 				Price:    curFloat,
@@ -293,12 +305,16 @@ func main() {
 			if *bananoMode {
 				priceMessage.NanoPrice = &nanoPriceFloat
 			}
-			if conn.Conn != nil {
-				wsClientMap.WriteJsonSafe(conn, priceMessage)
+			serialized, err := json.Marshal(priceMessage)
+			if err != nil {
+				klog.Errorf("Error serializing price message: %v", err)
+				continue
 			}
+			client.Send <- serialized
+
 		}
 	})
 	s.StartAsync()
 
-	app.Listen(":3000")
+	http.ListenAndServe(":3000", app)
 }

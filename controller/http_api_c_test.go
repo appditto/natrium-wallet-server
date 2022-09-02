@@ -13,11 +13,12 @@ import (
 	"github.com/appditto/natrium-wallet-server/net"
 	"github.com/appditto/natrium-wallet-server/repository"
 	"github.com/appditto/natrium-wallet-server/utils/mocks"
-	"github.com/gofiber/fiber/v2"
+	"github.com/go-chi/chi"
 	"github.com/stretchr/testify/assert"
 )
 
-var app *fiber.App
+var app *chi.Mux
+var controller *HttpController
 
 func init() {
 	// Mock http responses
@@ -36,15 +37,10 @@ func init() {
 		DB: mockDb,
 	}
 	// Setup controllers
-	wsClientMap := NewWSSubscriptions()
 	rpcClient := net.RPCClient{
 		Url: "http://localhost:8080",
 	}
-	hc := HttpController{RPCClient: &rpcClient, BananoMode: false, FcmTokenRepo: fcmRepo, WSClientMap: wsClientMap, FcmClient: nil}
-	app = fiber.New()
-
-	app.Post("/api", hc.HandleAction)
-	app.Post("/callback", hc.HandleHTTPCallback)
+	controller = &HttpController{RPCClient: &rpcClient, BananoMode: false, FcmTokenRepo: fcmRepo, FcmClient: nil}
 }
 
 // Verify that unsupported actions are rejected
@@ -54,11 +50,13 @@ func TestUnsupportedAction(t *testing.T) {
 		"action": "work_generate",
 	}
 	body, _ := json.Marshal(reqBody)
+	w := httptest.NewRecorder()
 	// Build request
 	req := httptest.NewRequest("POST", "/api", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-
-	resp, _ := app.Test(req)
+	controller.HandleAction(w, req)
+	resp := w.Result()
+	defer resp.Body.Close()
 	assert.Equal(t, 200, resp.StatusCode)
 
 	var respJson map[string]interface{}
@@ -84,11 +82,14 @@ func TestSupportedAction(t *testing.T) {
 		"action": "account_balance",
 	}
 	body, _ := json.Marshal(reqBody)
+	w := httptest.NewRecorder()
 	// Build request
 	req := httptest.NewRequest("POST", "/api", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	controller.HandleAction(w, req)
+	resp := w.Result()
+	defer resp.Body.Close()
 
-	resp, _ := app.Test(req)
 	assert.Equal(t, 200, resp.StatusCode)
 
 	var respJson map[string]interface{}

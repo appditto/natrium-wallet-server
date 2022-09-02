@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/appditto/natrium-wallet-server/repository"
 	"github.com/appditto/natrium-wallet-server/utils"
 	"github.com/appleboy/go-fcm"
-	"github.com/gofiber/fiber/v2"
+	"github.com/go-chi/render"
 	"golang.org/x/exp/slices"
 	"k8s.io/klog/v2"
 )
@@ -24,7 +25,6 @@ import (
 type HttpController struct {
 	RPCClient    *net.RPCClient
 	BananoMode   bool
-	WSClientMap  *WSClientMap
 	FcmTokenRepo *repository.FcmTokenRepo
 	FcmClient    *fcm.Client
 }
@@ -66,25 +66,28 @@ var supportedActions = []string{
 // HandleHTTPRequest handles all requests to the http server
 // It's generally designed to mimic the nano node's RPC API
 // Though we do additional processing in the middle for some actions
-func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
+func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 	// ipAddress := utils.IPAddress(c)
 
 	// Determine type of message and unMarshal
 	var baseRequest map[string]interface{}
-	if err := json.Unmarshal(c.Request().Body(), &baseRequest); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&baseRequest); err != nil {
 		klog.Errorf("Error unmarshalling http base request %s", err)
-		return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+		ErrInvalidRequest(w, r)
+		return
 	}
 
 	if _, ok := baseRequest["action"]; !ok {
-		return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+		ErrInvalidRequest(w, r)
+		return
 	}
 
 	action := strings.ToLower(fmt.Sprintf("%v", baseRequest["action"]))
 
 	if !slices.Contains(supportedActions, action) {
 		klog.Errorf("Action %s is not supported", action)
-		return c.Status(fiber.StatusOK).JSON(models.UNSUPPORTED_ACTION_ERR)
+		ErrUnsupportedAction(w, r)
+		return
 	}
 
 	// Trim count if it exists in action, so nobody can overload the node
@@ -92,7 +95,8 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		countAsInt, err := strconv.ParseInt(fmt.Sprintf("%v", val), 10, 64)
 		if err != nil {
 			klog.Errorf("Error converting count to int %s", err)
-			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			ErrInvalidRequest(w, r)
+			return
 		}
 		if countAsInt > 1000 || countAsInt < 0 {
 			countAsInt = 1000
@@ -104,38 +108,41 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 	if action == "account_history" {
 		// Retrieve account history
 		var accountHistory models.AccountHistory
-		if err := json.Unmarshal(c.Request().Body(), &accountHistory); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+		if err := json.NewDecoder(r.Body).Decode(&accountHistory); err != nil {
+			ErrInvalidRequest(w, r)
+			return
 		}
 
 		// Check if account is valid
 		if !utils.ValidateAddress(accountHistory.Account, hc.BananoMode) {
-			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			ErrInvalidRequest(w, r)
+			return
 		}
 		// Post request as-is to node
 		response, err := hc.RPCClient.MakeRequest(accountHistory)
 		if err != nil {
 			klog.Errorf("Error making account history request %s", err)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Error making account history request",
-			})
+			ErrInternalServerError(w, r, "Error making account history request")
+			return
 		}
 		var responseMap map[string]interface{}
 		err = json.Unmarshal(response, &responseMap)
 		if err != nil {
 			klog.Errorf("Error unmarshalling account history response %s", err)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Error making account history request",
-			})
+			ErrInternalServerError(w, r, "Error making account history request")
+			return
 		}
 
-		return c.Status(fiber.StatusOK).JSON(responseMap)
+		render.Status(r, http.StatusOK)
+		render.JSON(w, r, responseMap)
+		return
 	} else if action == "process" {
 		// Process request
 		var processRequest map[string]interface{}
-		if err := json.Unmarshal(c.Request().Body(), &processRequest); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&processRequest); err != nil {
 			if err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+				ErrInvalidRequest(w, r)
+				return
 			}
 		}
 
@@ -146,7 +153,8 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 			if !ok {
 				jsonBlockStr, ok := processRequest["json_block"].(string)
 				if !ok || (jsonBlockStr != "true" && jsonBlockStr != "false") {
-					return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+					ErrInvalidRequest(w, r)
+					return
 				}
 				if jsonBlockStr == "true" {
 					jsonBlock = true
@@ -160,15 +168,18 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		var processRequestBlock models.ProcessJsonBlock
 		var processRequestJsonBlock models.ProcessRequestJsonBlock
 		if jsonBlock {
-			if err := json.Unmarshal(c.Request().Body(), &processRequestJsonBlock); err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			if err := json.NewDecoder(r.Body).Decode(&processRequestJsonBlock); err != nil {
+				ErrInvalidRequest(w, r)
+				return
 			}
 		} else {
-			if err := json.Unmarshal(c.Request().Body(), &processRequestStringBlock); err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			if err := json.NewDecoder(r.Body).Decode(&processRequestStringBlock); err != nil {
+				ErrInvalidRequest(w, r)
+				return
 			}
 			if err := json.Unmarshal([]byte(*processRequestStringBlock.Block), &processRequestBlock); err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+				ErrInvalidRequest(w, r)
+				return
 			}
 			processRequestJsonBlock = models.ProcessRequestJsonBlock{
 				Block:   &processRequestBlock,
@@ -179,7 +190,8 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		}
 
 		if processRequestJsonBlock.Block.Type != "state" {
-			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			ErrInvalidRequest(w, r)
+			return
 		}
 
 		// Check if we wanna calculate work as part of this request
@@ -195,7 +207,8 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 				processRequestJsonBlock.SubType = &subtype
 			}
 		} else if !slices.Contains([]string{"change", "open", "receive", "send"}, *processRequestJsonBlock.SubType) {
-			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			ErrInvalidRequest(w, r)
+			return
 		}
 		// ! TODO - what is the point of this, from old server
 		// 	await r.app['rdata'].set(f"link_{block['link']}", "1", expire=3600)
@@ -205,7 +218,8 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		if processRequestJsonBlock.Block.Previous == "0" || processRequestJsonBlock.Block.Previous == "0000000000000000000000000000000000000000000000000000000000000000" {
 			workbaseBytes, err := utils.AddressToPub(processRequestJsonBlock.Block.Account)
 			if err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+				ErrInvalidRequest(w, r)
+				return
 			}
 			workBase = hex.EncodeToString(workbaseBytes)
 			subtype := "open"
@@ -216,14 +230,14 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 			accountInfo, err := hc.RPCClient.MakeAccountInfoRequest(processRequestJsonBlock.Block.Account)
 			if err != nil {
 				klog.Errorf("Error making account info request %s", err)
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": "Error making account info request",
-				})
+				ErrInternalServerError(w, r, "Error making account info request")
+				return
 			}
 			if _, ok := accountInfo["error"]; !ok {
 				// Account is opened
 				if strings.ToLower(fmt.Sprintf("%s", accountInfo["frontier"])) != strings.ToLower(processRequestJsonBlock.Block.Previous) {
-					return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+					ErrInvalidRequest(w, r)
+					return
 				}
 			}
 		}
@@ -244,15 +258,15 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 			work, err := hc.RPCClient.WorkGenerate(workBase, difficultyMultiplier)
 			if err != nil {
 				klog.Errorf("Error generating work %s", err)
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": "Error generating work",
-				})
+				ErrInternalServerError(w, r, "Error generating work")
+				return
 			}
 			processRequestJsonBlock.Block.Work = &work
 		}
 
 		if processRequestJsonBlock.Block.Work == nil {
-			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+			ErrInvalidRequest(w, r)
+			return
 		}
 
 		// Now G2G to actually broadcast it
@@ -264,88 +278,89 @@ func (hc *HttpController) HandleAction(c *fiber.Ctx) error {
 		rawResp, err := hc.RPCClient.MakeRequest(finalProcessRequest)
 		if err != nil {
 			klog.Errorf("Error making process request %s", err)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Error making process request",
-			})
+			ErrInternalServerError(w, r, "Error making process request")
+			return
 		}
 		var responseMap map[string]interface{}
 		err = json.Unmarshal(rawResp, &responseMap)
 		if err != nil {
 			klog.Errorf("Error unmarshalling response %s", err)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Error unmarshalling response",
-			})
+			ErrInternalServerError(w, r, "Error unmarshalling response")
+			return
 		}
-		if _, ok := responseMap["hash"]; !ok {
-			return c.Status(fiber.StatusBadRequest).JSON(responseMap)
-		}
-		return c.Status(fiber.StatusOK).JSON(responseMap)
+		render.Status(r, http.StatusOK)
+		render.JSON(w, r, responseMap)
+		return
 	} else if action == "pending" {
 		var pendingRequest models.PendingRequest
-		if err := json.Unmarshal(c.Request().Body(), &pendingRequest); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(models.INVALID_REQUEST_ERR)
+		if err := json.NewDecoder(r.Body).Decode(&pendingRequest); err != nil {
+			ErrInvalidRequest(w, r)
+			return
 		}
 		ioc := true
 		pendingRequest.IncludeOnlyConfirmed = &ioc
 		rawResp, err := hc.RPCClient.MakeRequest(pendingRequest)
 		if err != nil {
 			klog.Errorf("Error making pending request %s", err)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Error making pending request",
-			})
+			ErrInternalServerError(w, r, "Error making pending request")
+			return
 		}
 		var responseMap map[string]interface{}
 		err = json.Unmarshal(rawResp, &responseMap)
 		if err != nil {
 			klog.Errorf("Error unmarshalling response %s", err)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Error unmarshalling response",
-			})
+			ErrInternalServerError(w, r, "Error unmarshalling response")
+			return
 		}
-		return c.Status(fiber.StatusOK).JSON(responseMap)
+		render.Status(r, http.StatusOK)
+		render.JSON(w, r, responseMap)
+		return
 	}
 
 	rawResp, err := hc.RPCClient.MakeRequest(baseRequest)
 	if err != nil {
 		klog.Errorf("Error making request %s", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Error making request",
-		})
+		ErrInternalServerError(w, r, "Error making request")
+		return
 	}
 	var responseMap map[string]interface{}
 	err = json.Unmarshal(rawResp, &responseMap)
 	if err != nil {
 		klog.Errorf("Error unmarshalling response %s", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Error unmarshalling response",
-		})
+		ErrInternalServerError(w, r, "Error unmarshalling response")
+		return
 	}
-	return c.Status(fiber.StatusOK).JSON(responseMap)
+	render.Status(r, http.StatusOK)
+	render.JSON(w, r, responseMap)
 }
 
 // HTTP Callback is only for push notifications
-func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
+func (hc *HttpController) HandleHTTPCallback(w http.ResponseWriter, r *http.Request) {
 	var callback models.Callback
-	if err := json.Unmarshal(c.Request().Body(), &callback); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&callback); err != nil {
 		klog.Errorf("Error unmarshalling callback %s", err)
-		return c.Status(fiber.StatusOK).SendString("ok")
+		render.Status(r, http.StatusOK)
+		return
 	}
 	var callbackBlock models.CallbackBlock
 	if err := json.Unmarshal([]byte(callback.Block), &callbackBlock); err != nil {
 		klog.Errorf("Error unmarshalling callback block %s", err)
-		return c.Status(fiber.StatusOK).SendString("ok")
+		render.Status(r, http.StatusOK)
+		return
 	}
 
 	// Supports push notificaiton
 	if hc.FcmClient == nil {
-		return c.Status(fiber.StatusOK).SendString("ok")
+		render.Status(r, http.StatusOK)
+		return
 	}
 
 	// Get previous block
 	previous, err := hc.RPCClient.MakeBlockRequest(callbackBlock.Previous)
 	if err != nil {
 		klog.Errorf("Error making block request %s", err)
-		return c.Status(fiber.StatusOK).SendString("ok")
+		render.Status(r, http.StatusOK)
+		return
 	}
 
 	// ! TODO 	? not sure what the point of this is
@@ -361,13 +376,15 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 	curBalance, ok := curBalance.SetString(callbackBlock.Balance, 10)
 	if !ok {
 		klog.Error("Error settingcur balance")
-		return c.Status(fiber.StatusOK).SendString("ok")
+		render.Status(r, http.StatusOK)
+		return
 	}
 	prevBalance := big.NewInt(0)
 	prevBalance, ok = prevBalance.SetString(previous.Contents.Balance, 10)
 	if !ok {
 		klog.Error("Error setting prev balance")
-		return c.Status(fiber.StatusOK).SendString("ok")
+		render.Status(r, http.StatusOK)
+		return
 	}
 
 	// Delta
@@ -379,11 +396,13 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 		if err != nil {
 			klog.Errorf("Error finding tokens for account %s %v", tokens, err)
 			// No tokens
-			return c.Status(fiber.StatusOK).SendString("ok")
+			render.Status(r, http.StatusOK)
+			return
 		}
 		if len(tokens) == 0 {
 			// No tokens
-			return c.Status(fiber.StatusOK).SendString("ok")
+			render.Status(r, http.StatusOK)
+			return
 		}
 
 		// We have tokens, make it happen
@@ -394,7 +413,8 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 			asBan, err := utils.RawToBanano(sendAmount.String(), true)
 			if err != nil {
 				klog.Errorf("Error converting raw to banano %s", err)
-				return c.Status(fiber.StatusOK).SendString("ok")
+				render.Status(r, http.StatusOK)
+				return
 			}
 			notificationTitle = fmt.Sprintf("Received %s BANANO", strconv.FormatFloat(asBan, 'f', -1, 64))
 		} else {
@@ -402,7 +422,8 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 			asBan, err := utils.RawToNano(sendAmount.String(), true)
 			if err != nil {
 				klog.Errorf("Error converting raw to nano %s", err)
-				return c.Status(fiber.StatusOK).SendString("ok")
+				render.Status(r, http.StatusOK)
+				return
 			}
 			notificationTitle = fmt.Sprintf("Received Ӿ%s", strconv.FormatFloat(asBan, 'f', -1, 64))
 		}
@@ -427,10 +448,11 @@ func (hc *HttpController) HandleHTTPCallback(c *fiber.Ctx) error {
 			_, err := hc.FcmClient.Send(msg)
 			if err != nil {
 				klog.Errorf("Error sending notification %s", err)
-				return c.Status(fiber.StatusOK).SendString("ok")
+				render.Status(r, http.StatusOK)
+				return
 			}
 		}
 	}
 
-	return c.Status(fiber.StatusOK).SendString("ok")
+	render.Status(r, http.StatusOK)
 }
