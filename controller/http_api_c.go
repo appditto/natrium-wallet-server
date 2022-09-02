@@ -15,6 +15,7 @@ import (
 	"github.com/appditto/natrium-wallet-server/utils"
 	"github.com/appleboy/go-fcm"
 	"github.com/go-chi/render"
+	"github.com/mitchellh/mapstructure"
 	"golang.org/x/exp/slices"
 	"k8s.io/klog/v2"
 )
@@ -108,15 +109,13 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 	if action == "account_history" {
 		// Retrieve account history
 		var accountHistory models.AccountHistory
-		if err := json.NewDecoder(r.Body).Decode(&accountHistory); err != nil {
-			klog.Errorf("Error unmarshalling http account history request %s", err)
+		if err := mapstructure.Decode(baseRequest, &accountHistory); err != nil {
 			ErrInvalidRequest(w, r)
 			return
 		}
 
 		// Check if account is valid
 		if !utils.ValidateAddress(accountHistory.Account, hc.BananoMode) {
-			klog.Errorf("Invalid account %s", accountHistory.Account)
 			ErrInvalidRequest(w, r)
 			return
 		}
@@ -139,21 +138,12 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 		render.JSON(w, r, responseMap)
 		return
 	} else if action == "process" {
-		// Process request
-		var processRequest map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&processRequest); err != nil {
-			if err != nil {
-				ErrInvalidRequest(w, r)
-				return
-			}
-		}
-
 		var jsonBlock bool
-		if _, ok := processRequest["json_block"]; ok {
+		if _, ok := baseRequest["json_block"]; ok {
 			// The node is really dumb with their APIs, it's ambiguous whether it can be a bool or a string
-			jsonBlock, ok = processRequest["json_block"].(bool)
+			jsonBlock, ok = baseRequest["json_block"].(bool)
 			if !ok {
-				jsonBlockStr, ok := processRequest["json_block"].(string)
+				jsonBlockStr, ok := baseRequest["json_block"].(string)
 				if !ok || (jsonBlockStr != "true" && jsonBlockStr != "false") {
 					ErrInvalidRequest(w, r)
 					return
@@ -170,12 +160,12 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 		var processRequestBlock models.ProcessJsonBlock
 		var processRequestJsonBlock models.ProcessRequestJsonBlock
 		if jsonBlock {
-			if err := json.NewDecoder(r.Body).Decode(&processRequestJsonBlock); err != nil {
+			if err := mapstructure.Decode(baseRequest, &processRequestJsonBlock); err != nil {
 				ErrInvalidRequest(w, r)
 				return
 			}
 		} else {
-			if err := json.NewDecoder(r.Body).Decode(&processRequestStringBlock); err != nil {
+			if err := mapstructure.Decode(baseRequest, &processRequestStringBlock); err != nil {
 				ErrInvalidRequest(w, r)
 				return
 			}
@@ -295,7 +285,7 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if action == "pending" {
 		var pendingRequest models.PendingRequest
-		if err := json.NewDecoder(r.Body).Decode(&pendingRequest); err != nil {
+		if err := mapstructure.Decode(baseRequest, &pendingRequest); err != nil {
 			ErrInvalidRequest(w, r)
 			return
 		}
