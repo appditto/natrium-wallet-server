@@ -48,6 +48,7 @@ require (
 	github.com/fasthttp/websocket v1.5.0 // indirect
 	github.com/go-chi/chi v1.5.4
 	github.com/go-chi/cors v1.2.1
+	github.com/go-chi/httprate v0.7.0
 	github.com/go-chi/render v1.0.2
 	github.com/go-co-op/gocron v1.17.0
 	github.com/go-logr/logr v1.2.3 // indirect

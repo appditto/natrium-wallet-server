@@ -21,6 +21,7 @@ import (
 	"github.com/appleboy/go-fcm"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/httprate"
 	"github.com/go-chi/render"
 	"github.com/go-co-op/gocron"
 	socketio "github.com/googollee/go-socket.io"
@@ -194,8 +195,15 @@ func main() {
 		AllowCredentials: false,
 		MaxAge:           300, // Maximum value not ignored by any of major browsers
 	}))
-	// Pprof
-	// app.Use(pprof.New())
+	// Rate limiting middleware
+	app.Use(httprate.Limit(
+		50,            // requests
+		1*time.Minute, // per duration
+		// an oversimplified example of rate limiting by a custom header
+		httprate.WithKeyFuncs(func(r *http.Request) (string, error) {
+			return utils.IPAddress(r), nil
+		}),
+	))
 
 	// HTTP Routes
 	app.Post("/api", hc.HandleAction)

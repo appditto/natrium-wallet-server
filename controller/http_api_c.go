@@ -69,7 +69,12 @@ var supportedActions = []string{
 // Though we do additional processing in the middle for some actions
 func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 	ipAddress := utils.IPAddress(r)
-	klog.Infof("Received request from %s", ipAddress)
+	// This person should not have any privileges at all
+	if ipAddress == "62.204.108.5" {
+		render.Status(r, http.StatusForbidden)
+		render.JSON(w, r, map[string]string{"error": "IP address is banned"})
+		return
+	}
 
 	// Determine type of message and unMarshal
 	var baseRequest map[string]interface{}
@@ -91,8 +96,6 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 		ErrUnsupportedAction(w, r)
 		return
 	}
-
-	klog.Infof("Received request from %s with action %s", ipAddress, baseRequest["action"])
 
 	// Trim count if it exists in action, so nobody can overload the node
 	if val, ok := baseRequest["count"]; ok {
