@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/appditto/natrium-wallet-server/database"
@@ -49,6 +50,8 @@ type Client struct {
 	ID        uuid.UUID
 	Accounts  []string // Subscribed accounts
 	Currency  string
+
+	mutex sync.Mutex
 }
 
 var Upgrader = websocket.Upgrader{}
@@ -117,6 +120,12 @@ func (h *Hub) Run() {
 	}
 }
 
+func (h *Hub) BroadcastToClient(client *Client, message []byte) {
+	client.mutex.Lock()
+	defer client.mutex.Unlock()
+	client.Send <- message
+}
+
 var (
 	newline = []byte{'\n'}
 	space   = []byte{' '}
@@ -151,13 +160,13 @@ func (c *Client) readPump() {
 		if err = json.Unmarshal(msg, &baseRequest); err != nil {
 			klog.Errorf("Error unmarshalling websocket base request %s", err)
 			errJson, _ := json.Marshal(InvalidRequestError)
-			c.Send <- errJson
+			c.Hub.BroadcastToClient(c, errJson)
 			continue
 		}
 
 		if _, ok := baseRequest["action"]; !ok {
 			errJson, _ := json.Marshal(InvalidRequestError)
-			c.Send <- errJson
+			c.Hub.BroadcastToClient(c, errJson)
 			continue
 		}
 
@@ -166,13 +175,13 @@ func (c *Client) readPump() {
 			if err = mapstructure.Decode(baseRequest, &subscribeRequest); err != nil {
 				klog.Errorf("Error unmarshalling websocket subscribe request %s", err)
 				errJson, _ := json.Marshal(InvalidRequestError)
-				c.Send <- errJson
+				c.Hub.BroadcastToClient(c, errJson)
 				continue
 			}
 			// Check if account is valid
 			if !utils.ValidateAddress(subscribeRequest.Account, c.Hub.BananoMode) {
 				klog.Errorf("Invalid account %s , %v", subscribeRequest.Account, c.Hub.BananoMode)
-				c.Send <- []byte("{\"error\":\"Invalid account\"}")
+				c.Hub.BroadcastToClient(c, []byte("{\"error\":\"Invalid account\"}"))
 				continue
 			}
 
@@ -209,7 +218,7 @@ func (c *Client) readPump() {
 			accountInfo, err := c.Hub.RPCClient.MakeAccountInfoRequest(subscribeRequest.Account)
 			if err != nil || accountInfo == nil {
 				klog.Errorf("Error getting account info %v", err)
-				c.Send <- []byte("{\"error\":\"subscribe error\"}")
+				c.Hub.BroadcastToClient(c, []byte("{\"error\":\"subscribe error\"}"))
 				continue
 			}
 
@@ -252,10 +261,10 @@ func (c *Client) readPump() {
 			response, err := json.Marshal(accountInfo)
 			if err != nil {
 				klog.Errorf("Error marshalling account info %v", err)
-				c.Send <- []byte("{\"error\":\"subscribe error\"}")
+				c.Hub.BroadcastToClient(c, []byte("{\"error\":\"subscribe error\"}"))
 				continue
 			}
-			c.Send <- response
+			c.Hub.BroadcastToClient(c, response)
 
 			// The user may have a different UUID every time, 1 token, and multiple accounts
 			// We store account/token in postgres since that's what we care about
@@ -273,12 +282,12 @@ func (c *Client) readPump() {
 			if err = mapstructure.Decode(baseRequest, &fcmUpdateRequest); err != nil {
 				klog.Errorf("Error unmarshalling websocket fcm_update request %s", err)
 				errJson, _ := json.Marshal(InvalidRequestError)
-				c.Send <- errJson
+				c.Hub.BroadcastToClient(c, errJson)
 				continue
 			}
 			// Check if account is valid
 			if !utils.ValidateAddress(fcmUpdateRequest.Account, c.Hub.BananoMode) {
-				c.Send <- []byte("{\"error\":\"Invalid account\"}")
+				c.Hub.BroadcastToClient(c, []byte("{\"error\":\"Invalid account\"}"))
 				continue
 			}
 			// Do the updoot
@@ -292,7 +301,7 @@ func (c *Client) readPump() {
 		} else {
 			klog.Errorf("Unknown websocket request %s", msg)
 			errJson, _ := json.Marshal(InvalidRequestError)
-			c.Send <- errJson
+			c.Hub.BroadcastToClient(c, errJson)
 			continue
 		}
 	}

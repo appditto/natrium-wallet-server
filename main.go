@@ -300,7 +300,7 @@ func main() {
 			for client, _ := range wsHub.Clients {
 				for _, account := range client.Accounts {
 					if account == msg.Block.LinkAsAccount {
-						client.Send <- serialized
+						client.Hub.BroadcastToClient(client, serialized)
 					}
 				}
 			}
@@ -365,8 +365,7 @@ func main() {
 				klog.Errorf("Error serializing price message: %v", err)
 				continue
 			}
-			client.Send <- serialized
-
+			client.Hub.BroadcastToClient(client, serialized)
 		}
 	})
 	s.StartAsync()
