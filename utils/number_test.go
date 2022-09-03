@@ -20,6 +20,12 @@ func TestRawToBanano(t *testing.T) {
 	converted, err := RawToBanano(raw, true)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 10.0, converted)
+
+	raw = "5673500000000000000000000000000"
+	converted, err = RawToBanano(raw, true)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 56.73, converted)
+
 }
 
 func TestRawToNano(t *testing.T) {
@@ -28,6 +34,11 @@ func TestRawToNano(t *testing.T) {
 	converted, err := RawToNano(raw, true)
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 1.0, converted)
+
+	raw = "5673567900000000000000000000000"
+	converted, err = RawToNano(raw, true)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 5.673568, converted)
 }
 
 func TestBananoToRaw(t *testing.T) {

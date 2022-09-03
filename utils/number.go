@@ -3,8 +3,8 @@ package utils
 import (
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
+	"strconv"
 )
 
 const rawPerNanoStr = "1000000000000000000000000000000"
@@ -38,7 +38,9 @@ func RawToBanano(raw string, truncate bool) (float64, error) {
 		return f, nil
 	}
 
-	return math.Trunc(f/0.01) * 0.01, nil
+	asStr := fmt.Sprintf("%.2f", f)
+	truncated, _ := strconv.ParseFloat(asStr, 64)
+	return truncated, nil
 }
 
 // RawToNano - Converts Raw amount to usable Nano amount
@@ -54,18 +56,9 @@ func RawToNano(raw string, truncate bool) (float64, error) {
 		return f, nil
 	}
 	// Truncate precision beyond 0.000001
-	bf := big.NewFloat(0).SetPrec(1000000).Set(asNano)
-	bu := big.NewFloat(0).SetPrec(1000000).SetFloat64(0.000001)
-
-	bf.Quo(bf, bu)
-
-	// Truncate:
-	i := big.NewInt(0)
-	bf.Int(i)
-	bf.SetInt(i)
-
-	f, _ := bf.Mul(bf, bu).Float64()
-	return f, nil
+	asStr := asNano.Text('f', 6)
+	truncated, _ := strconv.ParseFloat(asStr, 64)
+	return truncated, nil
 }
 
 // BananoToRaw - Converts Banano amount to Raw amount
