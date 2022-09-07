@@ -197,7 +197,7 @@ func main() {
 	}))
 	// Rate limiting middleware
 	app.Use(httprate.Limit(
-		50,            // requests
+		100,           // requests
 		1*time.Minute, // per duration
 		// an oversimplified example of rate limiting by a custom header
 		httprate.WithKeyFuncs(func(r *http.Request) (string, error) {
