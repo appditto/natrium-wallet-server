@@ -34,6 +34,7 @@ var supportedActions = []string{
 	"account_history",
 	"process",
 	"pending",
+	"receivable",
 	"account_balance",
 	"account_block_count",
 	"account_check",
@@ -287,6 +288,8 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 			ErrInvalidRequest(w, r)
 			return
 		}
+		// We force include_only_confirmed since natrium/kalium don't include it
+		// "receivable" can be used to bypass this behavior
 		ioc := true
 		pendingRequest.IncludeOnlyConfirmed = &ioc
 		rawResp, err := hc.RPCClient.MakeRequest(pendingRequest)
