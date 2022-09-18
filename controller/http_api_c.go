@@ -144,7 +144,7 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				jsonBlockStr, ok := baseRequest["json_block"].(string)
 				if !ok || (jsonBlockStr != "true" && jsonBlockStr != "false") {
-					ErrInvalidRequest(w, r)
+					ErrBadrequest(w, r, "json_block must be true or false")
 					return
 				}
 				if jsonBlockStr == "true" {
@@ -160,16 +160,16 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 		var processRequestJsonBlock models.ProcessRequestJsonBlock
 		if jsonBlock {
 			if err := mapstructure.Decode(baseRequest, &processRequestJsonBlock); err != nil {
-				ErrInvalidRequest(w, r)
+				ErrBadrequest(w, r, err.Error())
 				return
 			}
 		} else {
 			if err := mapstructure.Decode(baseRequest, &processRequestStringBlock); err != nil {
-				ErrInvalidRequest(w, r)
+				ErrBadrequest(w, r, err.Error())
 				return
 			}
 			if err := json.Unmarshal([]byte(*processRequestStringBlock.Block), &processRequestBlock); err != nil {
-				ErrInvalidRequest(w, r)
+				ErrBadrequest(w, r, err.Error())
 				return
 			}
 			processRequestJsonBlock = models.ProcessRequestJsonBlock{
@@ -181,7 +181,7 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if processRequestJsonBlock.Block.Type != "state" {
-			ErrInvalidRequest(w, r)
+			ErrBadrequest(w, r, "Only state blocks are supported")
 			return
 		}
 
@@ -198,61 +198,63 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 				processRequestJsonBlock.SubType = &subtype
 			}
 		} else if !slices.Contains([]string{"change", "open", "receive", "send"}, *processRequestJsonBlock.SubType) {
-			ErrInvalidRequest(w, r)
+			ErrBadrequest(w, r, fmt.Sprintf("Invalid subtype %s", *processRequestJsonBlock.SubType))
 			return
 		}
 		// ! TODO - what is the point of this, from old server
 		// 	await r.app['rdata'].set(f"link_{block['link']}", "1", expire=3600)
 
 		// Open blocks generate work on the public key, others use previous
-		var workBase string
-		if processRequestJsonBlock.Block.Previous == "0" || processRequestJsonBlock.Block.Previous == "0000000000000000000000000000000000000000000000000000000000000000" {
-			workbaseBytes, err := utils.AddressToPub(processRequestJsonBlock.Block.Account)
-			if err != nil {
-				ErrInvalidRequest(w, r)
-				return
-			}
-			workBase = hex.EncodeToString(workbaseBytes)
-			subtype := "open"
-			processRequestJsonBlock.SubType = &subtype
-		} else {
-			workBase = processRequestJsonBlock.Block.Previous
-			// Since we are here, let's validate the frontier
-			accountInfo, err := hc.RPCClient.MakeAccountInfoRequest(processRequestJsonBlock.Block.Account)
-			if err != nil {
-				klog.Errorf("Error making account info request %s", err)
-				ErrInternalServerError(w, r, "Error making account info request")
-				return
-			}
-			if _, ok := accountInfo["error"]; !ok {
-				// Account is opened
-				if strings.ToLower(fmt.Sprintf("%s", accountInfo["frontier"])) != strings.ToLower(processRequestJsonBlock.Block.Previous) {
-					ErrInvalidRequest(w, r)
+		if doWork {
+			var workBase string
+			if processRequestJsonBlock.Block.Previous == "0" || processRequestJsonBlock.Block.Previous == "0000000000000000000000000000000000000000000000000000000000000000" {
+				workbaseBytes, err := utils.AddressToPub(processRequestJsonBlock.Block.Account)
+				if err != nil {
+					ErrBadrequest(w, r, err.Error())
 					return
 				}
+				workBase = hex.EncodeToString(workbaseBytes)
+				subtype := "open"
+				processRequestJsonBlock.SubType = &subtype
+			} else {
+				workBase = processRequestJsonBlock.Block.Previous
+				// Since we are here, let's validate the frontier
+				accountInfo, err := hc.RPCClient.MakeAccountInfoRequest(processRequestJsonBlock.Block.Account)
+				if err != nil {
+					klog.Errorf("Error making account info request %s", err)
+					ErrInternalServerError(w, r, "Error making account info request")
+					return
+				}
+				if _, ok := accountInfo["error"]; !ok {
+					// Account is opened
+					if strings.ToLower(fmt.Sprintf("%s", accountInfo["frontier"])) != strings.ToLower(processRequestJsonBlock.Block.Previous) {
+						ErrBadrequest(w, r, err.Error())
+						return
+					}
+				}
 			}
-		}
 
-		// We're g2g
-		var difficultyMultiplier int
-		if hc.BananoMode {
-			difficultyMultiplier = 1
-		} else if processRequestJsonBlock.SubType == nil {
-			// ! TODO - would be good to check if this is a send or receive if subtype isn't included
-			difficultyMultiplier = 64
-		} else if slices.Contains([]string{"change", "send"}, *processRequestJsonBlock.SubType) {
-			difficultyMultiplier = 64
-		} else {
-			difficultyMultiplier = 1
-		}
-		if doWork {
-			work, err := hc.RPCClient.WorkGenerate(workBase, difficultyMultiplier)
-			if err != nil {
-				klog.Errorf("Error generating work %s", err)
-				ErrInternalServerError(w, r, "Error generating work")
-				return
+			// We're g2g
+			var difficultyMultiplier int
+			if hc.BananoMode {
+				difficultyMultiplier = 1
+			} else if processRequestJsonBlock.SubType == nil {
+				// ! TODO - would be good to check if this is a send or receive if subtype isn't included
+				difficultyMultiplier = 64
+			} else if slices.Contains([]string{"change", "send"}, *processRequestJsonBlock.SubType) {
+				difficultyMultiplier = 64
+			} else {
+				difficultyMultiplier = 1
 			}
-			processRequestJsonBlock.Block.Work = &work
+			if doWork {
+				work, err := hc.RPCClient.WorkGenerate(workBase, difficultyMultiplier)
+				if err != nil {
+					klog.Errorf("Error generating work %s", err)
+					ErrInternalServerError(w, r, "Error generating work")
+					return
+				}
+				processRequestJsonBlock.Block.Work = &work
+			}
 		}
 
 		if processRequestJsonBlock.Block.Work == nil {

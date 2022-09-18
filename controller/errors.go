@@ -29,6 +29,13 @@ func ErrUnsupportedAction(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, &UnsupportedActionError)
 }
 
+func ErrBadrequest(w http.ResponseWriter, r *http.Request, errorText string) {
+	render.Status(r, http.StatusBadRequest)
+	render.JSON(w, r, &ErrorResponse{
+		Error: errorText,
+	})
+}
+
 func ErrInternalServerError(w http.ResponseWriter, r *http.Request, errorText string) {
 	render.Status(r, http.StatusInternalServerError)
 	render.JSON(w, r, &ErrorResponse{
