@@ -294,6 +294,9 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 		// "receivable" can be used to bypass this behavior
 		ioc := true
 		pendingRequest.IncludeOnlyConfirmed = &ioc
+		if pendingRequest.Count < 1 {
+			pendingRequest.Count = 1000
+		}
 		rawResp, err := hc.RPCClient.MakeRequest(pendingRequest)
 		if err != nil {
 			klog.Errorf("Error making pending request %s", err)
