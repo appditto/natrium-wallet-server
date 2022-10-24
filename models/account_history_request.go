@@ -6,4 +6,5 @@ type AccountHistory struct {
 	Account string `json:"account" mapstructure:"account"`
 	Count   *int   `json:"count,omitempty" mapstructure:"count,omitempty"`
 	Raw     *bool  `json:"raw,omitempty" mapstructure:"raw,omitempty"`
+	Reverse *bool  `json:"reverse,omitempty" mapstructure:"reverse,omitempty"`
 }
