@@ -268,6 +268,9 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 			"json_block": true,
 			"block":      processRequestJsonBlock.Block,
 		}
+		if processRequestJsonBlock.SubType != nil {
+			finalProcessRequest["subtype"] = processRequestJsonBlock.SubType
+		}
 		rawResp, err := hc.RPCClient.MakeRequest(finalProcessRequest)
 		if err != nil {
 			klog.Errorf("Error making process request %s", err)
