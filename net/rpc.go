@@ -20,6 +20,7 @@ type RPCClient struct {
 // Base request
 func (client *RPCClient) MakeRequest(request interface{}) ([]byte, error) {
 	requestBody, _ := json.Marshal(request)
+	klog.Errorf("Making request %s", string(requestBody))
 	// HTTP post
 	httpRequest, err := http.NewRequest(http.MethodPost, client.Url, bytes.NewBuffer(requestBody))
 	if err != nil {
