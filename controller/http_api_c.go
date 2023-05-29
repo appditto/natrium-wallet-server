@@ -257,12 +257,14 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 				difficultyMultiplier = 1
 			}
 			if doWork {
+				klog.Infof("Generating work for %s", workBase)
 				work, err := hc.RPCClient.WorkGenerate(workBase, difficultyMultiplier)
 				if err != nil {
 					klog.Errorf("Error generating work %s", err)
 					ErrInternalServerError(w, r, "Error generating work")
 					return
 				}
+				klog.Infof("Work generated %s", work)
 				processRequestJsonBlock.Block.Work = &work
 			}
 		}
