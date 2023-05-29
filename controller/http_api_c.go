@@ -90,6 +90,8 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	klog.Infof("Received HTTP action %s", action)
+
 	// Trim count if it exists in action, so nobody can overload the node
 	if val, ok := baseRequest["count"]; ok {
 		countAsInt, err := strconv.ParseInt(fmt.Sprintf("%v", val), 10, 64)
