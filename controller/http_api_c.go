@@ -146,6 +146,7 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				jsonBlockStr, ok := baseRequest["json_block"].(string)
 				if !ok || (jsonBlockStr != "true" && jsonBlockStr != "false") {
+					klog.Error("json_block must be true or false")
 					ErrBadrequest(w, r, "json_block must be true or false")
 					return
 				}
@@ -162,15 +163,18 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 		var processRequestJsonBlock models.ProcessRequestJsonBlock
 		if jsonBlock {
 			if err := mapstructure.Decode(baseRequest, &processRequestJsonBlock); err != nil {
+				klog.Errorf("Error decoding process request %s", err)
 				ErrBadrequest(w, r, err.Error())
 				return
 			}
 		} else {
 			if err := mapstructure.Decode(baseRequest, &processRequestStringBlock); err != nil {
+				klog.Errorf("Error decoding process request string block %s", err)
 				ErrBadrequest(w, r, err.Error())
 				return
 			}
 			if err := json.Unmarshal([]byte(*processRequestStringBlock.Block), &processRequestBlock); err != nil {
+				klog.Errorf("Error unmarshal process request %s", err)
 				ErrBadrequest(w, r, err.Error())
 				return
 			}
@@ -183,6 +187,7 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if processRequestJsonBlock.Block.Type != "state" {
+			klog.Errorf("Only state blocks are supported")
 			ErrBadrequest(w, r, "Only state blocks are supported")
 			return
 		}
@@ -200,6 +205,7 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 				processRequestJsonBlock.SubType = &subtype
 			}
 		} else if !slices.Contains([]string{"change", "open", "receive", "send"}, *processRequestJsonBlock.SubType) {
+			klog.Errorf("Invalid subtype %s", *processRequestJsonBlock.SubType)
 			ErrBadrequest(w, r, fmt.Sprintf("Invalid subtype %s", *processRequestJsonBlock.SubType))
 			return
 		}
@@ -212,6 +218,7 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 			if processRequestJsonBlock.Block.Previous == "0" || processRequestJsonBlock.Block.Previous == "0000000000000000000000000000000000000000000000000000000000000000" {
 				workbaseBytes, err := utils.AddressToPub(processRequestJsonBlock.Block.Account)
 				if err != nil {
+					klog.Errorf("Error converting address to public key %s", err)
 					ErrBadrequest(w, r, err.Error())
 					return
 				}
@@ -230,6 +237,7 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 				if _, ok := accountInfo["error"]; !ok {
 					// Account is opened
 					if strings.ToLower(fmt.Sprintf("%s", accountInfo["frontier"])) != strings.ToLower(processRequestJsonBlock.Block.Previous) {
+						klog.Errorf("Invalid frontier %s", processRequestJsonBlock.Block.Previous)
 						ErrBadrequest(w, r, err.Error())
 						return
 					}
@@ -260,6 +268,7 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if processRequestJsonBlock.Block.Work == nil {
+			klog.Errorf("Work is required")
 			ErrInvalidRequest(w, r)
 			return
 		}
@@ -286,6 +295,7 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 			ErrInternalServerError(w, r, "Error unmarshalling response")
 			return
 		}
+		klog.Infof("Successfully processed block %s", responseMap["hash"])
 		render.Status(r, http.StatusOK)
 		render.JSON(w, r, responseMap)
 		return
