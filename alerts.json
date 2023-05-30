@@ -1,5 +1,18 @@
 [
-  {
+    {
+        "id": 2,
+        "active": true,
+        "priority": "high",
+        "useless_comment": "Use https://currentmillis.com/ to get the current timestamp blow in milliseconds",
+        "timestamp": 1685454072002,
+        "link": "https://appditto.com/blog/nano-v25-and-natrium",
+        "en": {
+            "title": "Service Disruption",
+            "short_description": "Due to a bug in the latest Nano software, service disruption may occur.",
+            "long_description": "There is a bug in the Nano V25 Daric software that is causing disruptions in sending, receiving, and changing representatives.\n\nWe are working with the Nano team to provide as much information as possible. We will keep our users updated with new information as the Nano team provides it.\n\nYou can read more by tapping \"Read More\" below.\n\nWe appreciate your patience while we await a fix from the Nano foundation."
+        }
+    },
+    {
       "id": 1,
       "active": false,
       "priority": "high",
