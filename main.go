@@ -29,6 +29,7 @@ import (
 	"github.com/googollee/go-socket.io/engineio/transport"
 	"github.com/googollee/go-socket.io/engineio/transport/polling"
 	"github.com/googollee/go-socket.io/engineio/transport/websocket"
+	"golang.org/x/exp/slices"
 	"k8s.io/klog/v2"
 )
 
@@ -184,6 +185,9 @@ func main() {
 	}
 	hc := controller.HttpController{RPCClient: &rpcClient, BananoMode: *bananoMode, FcmTokenRepo: fcmRepo, FcmClient: fcmClient}
 
+	// Get RATE_LIMIT_WHITELIST from env
+	rateLimitWhitelist := strings.Split(utils.GetEnv("RATE_LIMIT_WHITELIST", ""), ",")
+
 	// Cors middleware
 	app.Use(cors.Handler(cors.Options{
 		// AllowedOrigins:   []string{"https://foo.com"}, // Use this to allow specific origin hosts
@@ -201,7 +205,12 @@ func main() {
 		1*time.Minute, // per duration
 		// an oversimplified example of rate limiting by a custom header
 		httprate.WithKeyFuncs(func(r *http.Request) (string, error) {
-			return utils.IPAddress(r), nil
+			key := utils.IPAddress(r)
+			if slices.Contains(rateLimitWhitelist, key) {
+				// Make key unique for whitelisted IPs
+				key = fmt.Sprint(time.Now().UnixNano())
+			}
+			return key, nil
 		}),
 	))
 
