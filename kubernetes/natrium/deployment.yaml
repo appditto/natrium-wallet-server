@@ -30,7 +30,7 @@ spec:
           - name: REDIS_DB
             value: "10"
           - name: RPC_URL
-            value: http://10.8.0.2:7076
+            value: http://10.1.0.1:7076
           - name: DB_HOST
             value: postgres.kubegres          
           - name: DB_PORT
@@ -65,4 +65,4 @@ spec:
           - name: BPOW_URL
             value: http://boompow-service.boompow-next:8080/graphql 
           - name: NODE_WS_URL
-            value: ws://10.8.0.2:7078
+            value: ws://10.1.0.1:7078
