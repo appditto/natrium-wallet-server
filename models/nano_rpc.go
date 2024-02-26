@@ -1,5 +1,10 @@
 package models
 
+import (
+	"encoding/json"
+	"errors"
+)
+
 // Requests
 type AccountInfoAction struct {
 	Action         string `json:"action"`
@@ -30,7 +35,38 @@ type WorkGenerate struct {
 
 // Responses
 type ReceivableResponse struct {
-	Blocks map[string]string `json:"blocks"`
+	Blocks map[string]string
+}
+
+// UnmarshalJSON is a custom unmarshaler for ReceivableResponse,
+// handling the case where "blocks" can be a JSON object or an empty string.
+func (r *ReceivableResponse) UnmarshalJSON(data []byte) error {
+	// First, try unmarshaling into the expected format.
+	var obj struct {
+		Blocks map[string]string `json:"blocks"`
+	}
+	err := json.Unmarshal(data, &obj)
+	if err == nil {
+		r.Blocks = obj.Blocks
+		return nil
+	}
+
+	// If the first attempt fails, check if "blocks" is an empty string.
+	var altObj struct {
+		Blocks json.RawMessage `json:"blocks"`
+	}
+	err = json.Unmarshal(data, &altObj)
+	if err != nil {
+		return err
+	}
+
+	// Check if blocks is an empty string.
+	if string(altObj.Blocks) == `""` {
+		r.Blocks = make(map[string]string) // Initialize Blocks as an empty map.
+		return nil
+	}
+
+	return errors.New("unexpected format for blocks")
 }
 
 type BlockContents struct {
