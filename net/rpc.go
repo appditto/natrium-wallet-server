@@ -2,7 +2,9 @@ package net
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"net/http"
 
@@ -124,20 +126,39 @@ func (client *RPCClient) MakeBlockRequest(hash string) (models.BlockResponse, er
 }
 
 func (client *RPCClient) WorkGenerate(hash string, difficultyMultiplier int) (string, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	results := make(chan string, 2)
+	errors := make(chan error, 2)
+
 	if client.BpowClient != nil {
-		res, err := client.BpowClient.WorkGenerate(hash, difficultyMultiplier)
-		if err != nil || res == "" {
-			klog.Infof("Error generating work with BPOW %s", err)
-			if utils.GetEnv("WORK_URL", "") == "" {
-				return "", err
+		go func() {
+			res, err := client.BpowClient.WorkGenerate(hash, difficultyMultiplier)
+			if err != nil {
+				errors <- err
+				return
 			}
-		}
-		return res, nil
+			results <- res
+		}()
 	}
 
-	// Base send difficulty
-	// Nano has 2 difficulties, higher for send, lower for receive
-	// Don't bother deriving it since it can only be one of two values
+	workURL := utils.GetEnv("WORK_URL", "")
+	if workURL != "" {
+		go client.httpWorkGenerate(ctx, hash, difficultyMultiplier, results, errors)
+	}
+
+	select {
+	case res := <-results:
+		cancel()                    // Cancel the context to stop the other request
+		client.sendWorkCancel(hash) // Send work_cancel to both after getting a result
+		return res, nil
+	case err := <-errors:
+		return "", err
+	}
+}
+
+func (client *RPCClient) httpWorkGenerate(ctx context.Context, hash string, difficultyMultiplier int, results chan<- string, errors chan<- error) {
 	difficulty := "fffffff800000000"
 	if difficultyMultiplier < 64 {
 		difficulty = "fffffe0000000000"
@@ -150,32 +171,68 @@ func (client *RPCClient) WorkGenerate(hash string, difficultyMultiplier int) (st
 	}
 
 	requestBody, _ := json.Marshal(request)
-	// HTTP post
-	httpRequest, err := http.NewRequest(http.MethodPost, utils.GetEnv("WORK_URL", ""), bytes.NewBuffer(requestBody))
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, utils.GetEnv("WORK_URL", ""), bytes.NewBuffer(requestBody))
 	if err != nil {
-		klog.Errorf("Error making work gen request %s", err)
-		return "", err
+		errors <- err
+		return
 	}
 	httpRequest.Header.Add("Content-Type", "application/json")
+
 	resp, err := Client.Do(httpRequest)
 	if err != nil {
-		klog.Errorf("Error processing work gen request %s", err)
-		return "", err
+		errors <- err
+		return
 	}
 	defer resp.Body.Close()
-	// Try to decode+deserialize
-	body, err := ioutil.ReadAll(resp.Body)
+
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		klog.Errorf("Error decoding work response body %s", err)
-		return "", err
+		errors <- err
+		return
 	}
 
 	var workResp models.WorkResponse
-	err = json.Unmarshal(body, &workResp)
-	if err != nil {
-		klog.Errorf("Error unmarshalling work_gen response %s", err)
-		return "", err
+	if err := json.Unmarshal(body, &workResp); err != nil {
+		errors <- err
+		return
 	}
 
-	return workResp.Work, nil
+	results <- workResp.Work
+}
+
+func (client *RPCClient) sendWorkCancel(hash string) {
+	workURL := utils.GetEnv("WORK_URL", "")
+	if workURL == "" {
+		// If WORK_URL is not set, do not proceed with the HTTP request
+		return
+	}
+
+	// Construct the request for work cancellation
+	request := models.WorkGenerate{
+		Action: "work_cancel",
+		Hash:   hash,
+	}
+
+	requestBody, err := json.Marshal(request)
+	if err != nil {
+		klog.Errorf("Error marshalling work cancel request: %s", err)
+		return
+	}
+
+	httpRequest, err := http.NewRequest(http.MethodPost, workURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		klog.Errorf("Error creating work cancel request: %s", err)
+		return
+	}
+	httpRequest.Header.Add("Content-Type", "application/json")
+
+	resp, err := Client.Do(httpRequest)
+	if err != nil {
+		klog.Errorf("Error sending work cancel request: %s", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Optionally, log a message indicating the request was sent or handle the response
+	klog.Info("Work cancel request sent successfully")
 }
