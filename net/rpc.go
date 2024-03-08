@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	"github.com/appditto/natrium-wallet-server/gql"
 	"github.com/appditto/natrium-wallet-server/models"
@@ -126,11 +128,23 @@ func (client *RPCClient) MakeBlockRequest(hash string) (models.BlockResponse, er
 }
 
 func (client *RPCClient) WorkGenerate(hash string, difficultyMultiplier int) (string, error) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	results := make(chan string, 2)
-	errors := make(chan error, 2)
+	chanSize := 0
+	if client.BpowClient != nil {
+		chanSize++
+	}
+	if utils.GetEnv("WORK_URL", "") != "" {
+		chanSize++
+	}
+
+	if chanSize == 0 {
+		return "", fmt.Errorf("No work providers available")
+	}
+
+	results := make(chan string, chanSize)
+	errors := make(chan error, chanSize)
 
 	if client.BpowClient != nil {
 		go func() {
@@ -150,11 +164,12 @@ func (client *RPCClient) WorkGenerate(hash string, difficultyMultiplier int) (st
 
 	select {
 	case res := <-results:
-		cancel()                    // Cancel the context to stop the other request
-		client.sendWorkCancel(hash) // Send work_cancel to both after getting a result
+		client.sendWorkCancel(hash)
 		return res, nil
 	case err := <-errors:
 		return "", err
+	case <-ctx.Done():
+		return "", ctx.Err()
 	}
 }
 
@@ -232,7 +247,4 @@ func (client *RPCClient) sendWorkCancel(hash string) {
 		return
 	}
 	defer resp.Body.Close()
-
-	// Optionally, log a message indicating the request was sent or handle the response
-	klog.Info("Work cancel request sent successfully")
 }

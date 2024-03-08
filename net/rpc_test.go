@@ -84,6 +84,8 @@ func TestBlockInfo(t *testing.T) {
 
 func TestWorkGenerate(t *testing.T) {
 	// Simulate response
+	os.Setenv("WORK_URL", "1234")
+	defer os.Unsetenv("WORK_URL")
 	mocks.GetDoFunc = func(req *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: 200,
