@@ -65,7 +65,7 @@ spec:
           - name: WORK_URL
             valueFrom: 
               secretKeyRef:
-                name: kalium
+                name: natrium
                 key: work_url
           - name: BPOW_URL
             value: http://boompow-service.boompow-next:8080/graphql 
