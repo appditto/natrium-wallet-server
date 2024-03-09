@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -38,7 +37,7 @@ func (client *RPCClient) MakeRequest(request interface{}) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	// Try to decode+deserialize
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		klog.Errorf("Error decoding response body %s", err)
 		return nil, err
@@ -127,6 +126,11 @@ func (client *RPCClient) MakeBlockRequest(hash string) (models.BlockResponse, er
 	return blockResponse, nil
 }
 
+type workResult struct {
+	result string
+	source string // "bpowClient" or "httpRequest"
+}
+
 func (client *RPCClient) WorkGenerate(hash string, difficultyMultiplier int) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -143,7 +147,7 @@ func (client *RPCClient) WorkGenerate(hash string, difficultyMultiplier int) (st
 		return "", fmt.Errorf("No work providers available")
 	}
 
-	results := make(chan string, chanSize)
+	results := make(chan workResult, chanSize)
 	errors := make(chan error, chanSize)
 
 	if client.BpowClient != nil {
@@ -153,7 +157,7 @@ func (client *RPCClient) WorkGenerate(hash string, difficultyMultiplier int) (st
 				errors <- err
 				return
 			}
-			results <- res
+			results <- workResult{result: res, source: "bpowClient"}
 		}()
 	}
 
@@ -164,8 +168,10 @@ func (client *RPCClient) WorkGenerate(hash string, difficultyMultiplier int) (st
 
 	select {
 	case res := <-results:
-		client.sendWorkCancel(hash)
-		return res, nil
+		if res.source != "httpRequest" {
+			client.sendWorkCancel(hash) // Only send work cancel if the result did not come from HTTP request
+		}
+		return res.result, nil
 	case err := <-errors:
 		return "", err
 	case <-ctx.Done():
@@ -173,7 +179,7 @@ func (client *RPCClient) WorkGenerate(hash string, difficultyMultiplier int) (st
 	}
 }
 
-func (client *RPCClient) httpWorkGenerate(ctx context.Context, hash string, difficultyMultiplier int, results chan<- string, errors chan<- error) {
+func (client *RPCClient) httpWorkGenerate(ctx context.Context, hash string, difficultyMultiplier int, results chan<- workResult, errors chan<- error) {
 	difficulty := "fffffff800000000"
 	if difficultyMultiplier < 64 {
 		difficulty = "fffffe0000000000"
@@ -212,7 +218,11 @@ func (client *RPCClient) httpWorkGenerate(ctx context.Context, hash string, diff
 		return
 	}
 
-	results <- workResp.Work
+	// Send the result along with the source identifier
+	results <- workResult{
+		result: workResp.Work,
+		source: "httpRequest",
+	}
 }
 
 func (client *RPCClient) sendWorkCancel(hash string) {
