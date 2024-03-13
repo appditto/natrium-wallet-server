@@ -228,7 +228,7 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 				if _, ok := accountInfo["error"]; !ok {
 					// Account is opened
 					if strings.ToLower(fmt.Sprintf("%s", accountInfo["frontier"])) != strings.ToLower(processRequestJsonBlock.Block.Previous) {
-						ErrBadrequest(w, r, err.Error())
+						ErrBadrequest(w, r, "invalid request")
 						return
 					}
 				}
