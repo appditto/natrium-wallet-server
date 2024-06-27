@@ -30,23 +30,17 @@ spec:
           - name: REDIS_DB
             value: "15"
           - name: RPC_URL
-            value: http://10.255.0.1:7072
+            value: http://10.4.0.1:7072
           - name: DB_HOST
-            value: postgres.kubegres          
+            value: pg-kalium.kalium       
           - name: DB_PORT
             value: "5432"
           - name: DB_SSLMODE
             value: disable
           - name: DB_NAME
-            valueFrom:
-              secretKeyRef:
-                name: kalium
-                key: db_name   
+            value: postgres 
           - name: DB_USER
-            valueFrom:
-              secretKeyRef:
-                name: kalium
-                key: db_user  
+            value: postgres 
           - name: DB_PASS
             valueFrom:
               secretKeyRef:
@@ -72,7 +66,7 @@ spec:
               secretKeyRef:
                 name: kalium
                 key: rate_limit_whitelist
-          - name: BPOW_URL
-            value: http://boompow-service.boompow-next:8080/graphql 
+          # - name: BPOW_URL
+          #   value: http://boompow-service.boompow-next:8080/graphql 
           - name: NODE_WS_URL
-            value: ws://10.255.0.1:7074
+            value: ws://10.4.0.1:7074
