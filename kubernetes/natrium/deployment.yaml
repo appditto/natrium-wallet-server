@@ -32,7 +32,7 @@ spec:
           - name: RPC_URL
             value: http://10.7.0.1:7076
           - name: DB_HOST
-            value: pg-natrium.postgres          
+            value: pg-natrium.natrium          
           - name: DB_PORT
             value: "5432"
           - name: DB_SSLMODE
