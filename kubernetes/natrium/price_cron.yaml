@@ -5,6 +5,7 @@ metadata:
   name: natrium-prices
 spec:
   schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid   # Ensures no concurrent job runs
   jobTemplate:
     spec:
       template:

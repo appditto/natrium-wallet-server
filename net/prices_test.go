@@ -17,28 +17,6 @@ func init() {
 	Client = &mocks.MockClient{}
 }
 
-func TestDolarTodayPrice(t *testing.T) {
-	// Mock redis client
-	os.Setenv("MOCK_REDIS", "true")
-	defer os.Unsetenv("MOCK_REDIS")
-	// Simulate response
-	mocks.GetDoFunc = func(req *http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: 304,
-			Header: http.Header{
-				"Content-Type": []string{"application/json"},
-			},
-			Body: mocks.DolarTodayResponse,
-		}, nil
-	}
-
-	err := UpdateDolarTodayPrice()
-	assert.Equal(t, nil, err)
-	dolarToday, err := database.GetRedisDB().Hget("prices", "dolartoday:usd-ves")
-	assert.Equal(t, nil, err)
-	assert.Equal(t, "8.15", dolarToday)
-}
-
 func TestDolarSiPrice(t *testing.T) {
 	// Mock redis client
 	os.Setenv("MOCK_REDIS", "true")

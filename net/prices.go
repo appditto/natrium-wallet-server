@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -42,26 +45,61 @@ func MakeGetRequest(url string) ([]byte, error) {
 	return body, nil
 }
 
+// DolarTodayResponse structure based on expected JSON response
 func UpdateDolarTodayPrice() error {
-	rawResp, err := MakeGetRequest(config.DOLARTODAY_URL)
+	// Data to be sent in POST request
+	data := url.Values{}
+	data.Set("action", "dt_currency_calculator_handler")
+	data.Set("amount", "1")
+
+	// Making the HTTP POST request
+	request, err := http.NewRequest(http.MethodPost, config.DOLARTODAY_URL, strings.NewReader(data.Encode()))
 	if err != nil {
-		klog.Errorf("Error making dolar today request %s", err)
+		klog.Errorf("Error creating request %s", err)
 		return err
 	}
-	var dolarTodayResp models.DolarTodayResponse
-	err = json.Unmarshal(rawResp, &dolarTodayResp)
+	request.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	response, err := Client.Do(request)
 	if err != nil {
-		klog.Errorf("Error unmarshalling response %s", err)
+		klog.Errorf("Error making dolar today request: %s", err)
+		return err
+	}
+	defer response.Body.Close()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		klog.Errorf("Error reading response body: %s", err)
 		return err
 	}
 
-	if dolarTodayResp.Usd.LocalbitcoinRef > 0 {
-		fmt.Printf("%s %f\n", "DolarToday USD-VES", dolarTodayResp.Usd.LocalbitcoinRef)
-		database.GetRedisDB().Hset("prices", "dolartoday:usd-ves", dolarTodayResp.Usd.LocalbitcoinRef)
-	} else {
-		klog.Errorf("Error getting dolar today price")
-		return errors.New("Dolartoday localbitcoin ref was 0")
+	fmt.Printf("Raw response: %s\n", string(body))
+
+	var dolarTodayResp map[string]string
+	err = json.Unmarshal(body, &dolarTodayResp)
+	if err != nil {
+		klog.Errorf("Error unmarshalling response: %s", err)
+		return err
 	}
+
+	// Extracting the "Dólar Bitcoin" value
+	bitcoinValueStr, ok := dolarTodayResp["Dólar Bitcoin"]
+	if !ok || bitcoinValueStr == "" {
+		klog.Errorf("Invalid or missing 'Dólar Bitcoin' in response")
+		return errors.New("invalid response data")
+	}
+
+	// Use regular expression to extract the numeric part
+	re := regexp.MustCompile(`\d+\.\d+`)
+	match := re.FindString(bitcoinValueStr)
+	if match == "" {
+		klog.Errorf("No numeric value found in 'Dólar Bitcoin' response")
+		return errors.New("no numeric value found")
+	}
+
+	fmt.Printf("%s %s\n", "DolarToday USD-VES:", match)
+
+	database.GetRedisDB().Hset("prices", "dolartoday:usd-ves", match)
+
 	return nil
 }
 
