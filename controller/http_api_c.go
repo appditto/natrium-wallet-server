@@ -98,8 +98,16 @@ func (hc *HttpController) HandleAction(w http.ResponseWriter, r *http.Request) {
 			ErrInvalidRequest(w, r)
 			return
 		}
-		if countAsInt > 1000 || countAsInt < 0 {
-			countAsInt = 1000
+		// Get admin api key
+		adminAPIKey := r.Header.Get("Authorization")
+		// get from env
+		adminAPIKeyEnv := utils.GetEnv("ADMIN_API_KEY", "")
+		maxCount := 1000
+		if adminAPIKeyEnv != "" && adminAPIKey == adminAPIKeyEnv {
+			maxCount = 100000
+		}
+		if countAsInt > int64(maxCount) || countAsInt < 0 {
+			countAsInt = int64(maxCount)
 		}
 		baseRequest["count"] = countAsInt
 	}

@@ -66,6 +66,11 @@ spec:
               secretKeyRef:
                 name: kalium
                 key: rate_limit_whitelist
+          - name: ADMIN_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: kalium
+                key: admin_api_key
           # - name: BPOW_URL
           #   value: http://boompow-service.boompow-next:8080/graphql 
           - name: NODE_WS_URL

@@ -187,6 +187,8 @@ func main() {
 
 	// Get RATE_LIMIT_WHITELIST from env
 	rateLimitWhitelist := strings.Split(utils.GetEnv("RATE_LIMIT_WHITELIST", ""), ",")
+	// Get ADMIN_API_KEY from env
+	adminAPIKey := utils.GetEnv("ADMIN_API_KEY", "")
 
 	// Cors middleware
 	app.Use(cors.Handler(cors.Options{
@@ -208,6 +210,10 @@ func main() {
 			key := utils.IPAddress(r)
 			if slices.Contains(rateLimitWhitelist, key) {
 				// Make key unique for whitelisted IPs
+				key = fmt.Sprint(time.Now().UnixNano())
+			}
+			if adminAPIKey != "" && r.Header.Get("Authorization") == adminAPIKey {
+				// Make key unique for admin API key
 				key = fmt.Sprint(time.Now().UnixNano())
 			}
 			return key, nil
