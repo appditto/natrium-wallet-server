@@ -39,6 +39,7 @@ Configured with env variables:
 REDIS_HOST  # default localhost
 REDIST_PORT # default 6379
 REDIS_DB    # default 0
+REDIS_PASSWORD # default none
 ```
 
 **PostgreSQL**

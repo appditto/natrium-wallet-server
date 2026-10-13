@@ -49,8 +49,9 @@ func GetRedisDB() *redisManager {
 				panic("Invalid REDIS_DB specified")
 			}
 			client := redis.NewClient(&redis.Options{
-				Addr: fmt.Sprintf("%s:%d", utils.GetEnv("REDIS_HOST", "localhost"), redis_port),
-				DB:   redis_db,
+				Addr:     fmt.Sprintf("%s:%d", utils.GetEnv("REDIS_HOST", "localhost"), redis_port),
+				Password: utils.GetEnv("REDIS_PASSWORD", ""),
+				DB:       redis_db,
 			})
 			singleton = &redisManager{
 				Client: client,
