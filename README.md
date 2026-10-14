@@ -57,8 +57,8 @@ DB_PASS # The password
 **Other Configuration**
 
 ```
-FCM_API_KEY # For push notifications
-BPOW_KEY    # To use BoomPoW for work generation
+FCM_CREDENTIALS # Firebase service account JSON, for push notifications
+BPOW_KEY        # To use BoomPoW for work generation
 ```
 
 ## Running

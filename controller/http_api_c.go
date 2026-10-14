@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"strings"
 
+	"firebase.google.com/go/v4/messaging"
 	"github.com/appditto/natrium-wallet-server/models"
 	"github.com/appditto/natrium-wallet-server/net"
 	"github.com/appditto/natrium-wallet-server/repository"
 	"github.com/appditto/natrium-wallet-server/utils"
-	"github.com/appleboy/go-fcm"
 	"github.com/go-chi/render"
 	"github.com/mitchellh/mapstructure"
 	"golang.org/x/exp/slices"
@@ -27,7 +27,7 @@ type HttpController struct {
 	RPCClient    *net.RPCClient
 	BananoMode   bool
 	FcmTokenRepo *repository.FcmTokenRepo
-	FcmClient    *fcm.Client
+	FcmClient    *messaging.Client
 }
 
 var supportedActions = []string{
@@ -437,27 +437,47 @@ func (hc *HttpController) HandleHTTPCallback(w http.ResponseWriter, r *http.Requ
 		}
 		notificationBody := fmt.Sprintf("Open %s to receive this transaction.", appName)
 
-		for _, token := range tokens {
-			// Create the message to be sent.
-			msg := &fcm.Message{
-				To:       token.FcmToken,
-				Priority: "high",
-				Data: map[string]interface{}{
+		messages := make([]*messaging.Message, len(tokens))
+		for i, token := range tokens {
+			messages[i] = &messaging.Message{
+				Token: token.FcmToken,
+				Data: map[string]string{
 					"click_action": "FLUTTER_NOTIFICATION_CLICK",
 					"account":      callbackBlock.LinkAsAccount,
 				},
-				Notification: &fcm.Notification{
+				Notification: &messaging.Notification{
 					Title: notificationTitle,
 					Body:  notificationBody,
-					Tag:   callbackBlock.LinkAsAccount,
-					Sound: "default",
+				},
+				Android: &messaging.AndroidConfig{
+					Priority: "high",
+					Notification: &messaging.AndroidNotification{
+						Tag:   callbackBlock.LinkAsAccount,
+						Sound: "default",
+					},
+				},
+				APNS: &messaging.APNSConfig{
+					Headers: map[string]string{"apns-priority": "10"},
+					Payload: &messaging.APNSPayload{Aps: &messaging.Aps{Sound: "default"}},
 				},
 			}
-			_, err := hc.FcmClient.Send(msg)
-			if err != nil {
-				klog.Errorf("Error sending notification %s", err)
-				render.Status(r, http.StatusOK)
-				return
+		}
+		batch, err := hc.FcmClient.SendEach(r.Context(), messages)
+		if err != nil {
+			klog.Errorf("Error sending notifications %s", err)
+			render.Status(r, http.StatusOK)
+			return
+		}
+		for i, resp := range batch.Responses {
+			if resp.Success {
+				continue
+			}
+			if !messaging.IsUnregistered(resp.Error) {
+				klog.Errorf("Error sending notification %s", resp.Error)
+				continue
+			}
+			if err := hc.FcmTokenRepo.DeleteFcmToken(tokens[i].FcmToken); err != nil {
+				klog.Errorf("Error deleting unregistered FCM token %s", err)
 			}
 		}
 	}

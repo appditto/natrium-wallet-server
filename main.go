@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/messaging"
 	"github.com/appditto/natrium-wallet-server/controller"
 	"github.com/appditto/natrium-wallet-server/database"
 	"github.com/appditto/natrium-wallet-server/gql"
@@ -18,7 +21,6 @@ import (
 	"github.com/appditto/natrium-wallet-server/net"
 	"github.com/appditto/natrium-wallet-server/repository"
 	"github.com/appditto/natrium-wallet-server/utils"
-	"github.com/appleboy/go-fcm"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/httprate"
@@ -30,6 +32,7 @@ import (
 	"github.com/googollee/go-socket.io/engineio/transport/polling"
 	"github.com/googollee/go-socket.io/engineio/transport/websocket"
 	"golang.org/x/exp/slices"
+	"google.golang.org/api/option"
 	"k8s.io/klog/v2"
 )
 
@@ -162,15 +165,18 @@ func main() {
 	}
 
 	// Setup FCM client
-	var fcmClient *fcm.Client
-	fcmToken := utils.GetEnv("FCM_API_KEY", "")
-	if fcmToken != "" {
-		svc, err := fcm.NewClient(fcmToken)
+	var fcmClient *messaging.Client
+	if credentials := utils.GetEnv("FCM_CREDENTIALS", ""); credentials != "" {
+		app, err := firebase.NewApp(context.Background(), nil, option.WithAuthCredentialsJSON(option.ServiceAccount, []byte(credentials)))
+		if err != nil {
+			klog.Errorf("Error initating Firebase app: %v", err)
+			os.Exit(1)
+		}
+		fcmClient, err = app.Messaging(context.Background())
 		if err != nil {
 			klog.Errorf("Error initating FCM client: %v", err)
 			os.Exit(1)
 		}
-		fcmClient = svc
 	}
 
 	// Create repository
