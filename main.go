@@ -202,7 +202,7 @@ func main() {
 		MaxAge:           300, // Maximum value not ignored by any of major browsers
 	}))
 	// Rate limiting middleware
-	app.Use(httprate.Limit(
+	rateLimit := httprate.Limit(
 		100,           // requests
 		1*time.Minute, // per duration
 		// an oversimplified example of rate limiting by a custom header
@@ -218,11 +218,20 @@ func main() {
 			}
 			return key, nil
 		}),
-	))
+	)
+	app.Use(rateLimit)
 
 	// HTTP Routes
 	app.Post("/api", hc.HandleAction)
-	app.Post("/callback", hc.HandleHTTPCallback)
+
+	callbacks := chi.NewRouter()
+	callbacks.Use(rateLimit)
+	callbacks.Post("/callback", hc.HandleHTTPCallback)
+	go func() {
+		if err := http.ListenAndServe(":3001", callbacks); err != nil {
+			klog.Fatalf("Callback server failed: %v", err)
+		}
+	}()
 
 	// Alerts
 	app.Route("/alerts", func(r chi.Router) {
